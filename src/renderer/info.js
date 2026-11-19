@@ -9,7 +9,7 @@ function initInfo() {
 
   $('info-perm').append(
     el('tr', {}, el('th', {}), WHAT.map((w) => el('th', {}, w))),
-    WHO.map((who, row) => el('tr', {}, el('th', {}, who), WHAT.map((what, col) => {
+    ...WHO.map((who, row) => el('tr', {}, el('th', {}, who), WHAT.map((what, col) => {
       const box = el('input', { type: 'checkbox', 'aria-label': `${who}: ${what}` });
       boxes[row * 3 + col] = box;
       box.addEventListener('change', () => { $('info-mode').value = modeToText(readBoxes()); });
