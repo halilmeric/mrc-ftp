@@ -7,6 +7,10 @@ cPanel hostinglerine bağlanıp dosya yüklemek ve indirmek için sade bir macOS
 - Şifreler macOS Keychain destekli şifrelemeyle saklanır.
 - Sunucu sertifikası doğrulanamazsa bağlanmadan önce sorar; şifre ondan önce gönderilmez.
 - Yarım dosya bırakmaz: aktarım geçici bir ada yazılır, bitince asıl ada taşınır.
+- Bağlantı koparsa "Yeniden dene" kaldığı yerden sürdürür.
+- Sunucudaki dosyayı kendi editöründe düzenle: sağ tık › Düzenle; her kayıtta geri yüklenir, dosya sunucuda değiştiyse önce sorar.
+- Dosya izinleri (chmod): sağ tık › Bilgi ve izinler.
+- Boşluk tuşuyla Hızlı Bakış; ok tuşları ve Enter ile gezinme.
 
 ## Geliştirme
 
@@ -27,7 +31,7 @@ Uygulama Apple tarafından imzalanmamıştır (yalnızca ad-hoc imza). Derlendi�
 
 ## Yol haritası
 
-2. aşama: SFTP ve SSH terminali.
+Sırada: SFTP, SSH anahtarı ve terminal; ardından eşzamanlı aktarım, sekmeler ve klasör eşitleme.
 
 ## Lisans
 

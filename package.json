@@ -1,6 +1,6 @@
 {
   "name": "mrc-ftp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "cPanel hostingleri için sade FTP/FTPS istemcisi",
   "main": "src/main/main.js",
   "license": "MIT",
