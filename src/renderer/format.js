@@ -28,4 +28,7 @@ function formatEta(seconds) {
   return `${Math.round(seconds / 60)} dk`;
 }
 
-if (typeof module !== 'undefined') module.exports = { formatSize, formatDate, formatEta };
+const modeToText = (mode) => (mode & 0o777).toString(8).padStart(3, '0');
+const textToMode = (text) => (/^[0-7]{3}$/.test(text) ? parseInt(text, 8) : null);
+
+if (typeof module !== 'undefined') module.exports = { formatSize, formatDate, formatEta, modeToText, textToMode };

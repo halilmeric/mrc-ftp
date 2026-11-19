@@ -127,6 +127,12 @@ dialog .acts { justify-content: flex-end; margin-top: 6px; }
 dialog .acts button { padding: 8px 14px; font-size: 13px; }
 dialog code { display: block; font: 11px/1.5 ui-monospace, Menlo, monospace; word-break: break-all; background: var(--win); border: 1px solid var(--wl); border-radius: 7px; padding: 8px 10px; margin-bottom: 10px; }
 .err { color: var(--bad); }
+.perm { border-collapse: collapse; margin: 4px 0 12px; }
+.perm th, .perm td { padding: 5px 14px 5px 0; text-align: center; font-weight: 400; color: var(--wm); font-size: 12px; }
+.perm th:first-child { text-align: left; color: var(--wfg); }
+.perm input { height: auto; }
+#info-mode { width: 80px; font-variant-numeric: tabular-nums; }
+#info-meta { user-select: text; word-break: break-all; }
 .warnline { color: var(--warn); background: var(--warnbg); border-radius: 7px; padding: 8px 10px; margin: 0; }
 .menu { position: fixed; z-index: 10; min-width: 160px; background: var(--card); border: 1px solid var(--wl); border-radius: 9px; padding: 5px; box-shadow: 0 12px 30px -10px rgba(0, 0, 0, .45); display: flex; flex-direction: column; }
 .menu button { border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: 6px; }

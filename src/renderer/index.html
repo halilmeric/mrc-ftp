@@ -85,9 +85,23 @@
   </form>
 </dialog>
 
+<dialog id="dlg-info">
+  <h2 id="info-name"></h2>
+  <p id="info-meta" class="muted"></p>
+  <table id="info-perm" class="perm"></table>
+  <label>Sayı olarak<input id="info-mode" inputmode="numeric" maxlength="3" autocomplete="off"></label>
+  <p id="info-note" class="muted" hidden>Mevcut izin okunamadı.</p>
+  <p id="info-err" class="err" hidden></p>
+  <div class="acts">
+    <button id="info-cancel" type="button">Kapat</button>
+    <button id="info-apply" class="p" type="button">Uygula</button>
+  </div>
+</dialog>
+
 <script src="format.js"></script>
 <script src="ui.js"></script>
 <script src="sites.js"></script>
+<script src="info.js"></script>
 <script src="pane.js"></script>
 <script src="tray.js"></script>
 <script src="app.js"></script>

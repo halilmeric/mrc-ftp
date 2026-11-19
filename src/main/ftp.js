@@ -123,6 +123,9 @@ function parseListDate(raw, now = new Date()) {
 
 const toIso = (info) => (info.modifiedAt ? info.modifiedAt.toISOString() : parseListDate(info.rawModifiedAt));
 
+// basic-ftp izinleri {user, group, world} olarak verir; tek sayıya (ör. 0o644) çevrilir.
+const toMode = (p) => (p ? (p.user << 6) | (p.group << 3) | p.world : null);
+
 const sortEntries = (list) => list.sort((a, b) => (b.isDir - a.isDir) || a.name.localeCompare(b.name, 'tr'));
 
 async function openSession(cfg) {
@@ -153,10 +156,11 @@ async function openSession(cfg) {
     run,
     get client() { return client; },
     list: (path) => run(async (c) => sortEntries(sanitizeEntries(await c.list(path)).map((f) => ({
-      name: f.name, size: f.size, isDir: f.isDirectory, modified: toIso(f),
+      name: f.name, size: f.size, isDir: f.isDirectory, modified: toIso(f), mode: toMode(f.permissions),
     })))),
     mkdir: (path) => run((c) => c.send('MKD ' + path)),
     rename: (from, to) => run((c) => c.rename(from, to)),
+    chmod: (path, mode) => run((c) => c.send(`SITE CHMOD ${(mode & 0o777).toString(8).padStart(3, '0')} ${path}`)),
     remove: (path, isDir) => run((c) => (isDir ? c.removeDir(path) : c.remove(path))),
     close: () => client.close(),
   };

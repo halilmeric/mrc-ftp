@@ -53,6 +53,7 @@ function registerIpc(win) {
     'remote:mkdir': (p) => need().session.mkdir(p),
     'remote:rename': (from, to) => need().session.rename(from, to),
     'remote:remove': (p, isDir) => need().session.remove(p, isDir),
+    'remote:chmod': (p, mode) => need().session.chmod(p, Number(mode)),
     'local:home': () => localfs.home(),
     'local:list': (p) => localfs.list(p),
     'transfers:add': (job) => need().queue.add(job),

@@ -26,8 +26,14 @@
     onDropIn: (src, dir) => guard() && src.from === 'remote' && download(src.entries, src.dir, dir),
     onLoaded: (n) => { $('st-local').textContent = `Mac: ${n} öğe`; },
   });
+  const info = initInfo();
   const remote = createPane({
     root: $('remote'), kind: 'remote', label: 'Sunucu', list: mrc.remote.list, ops: mrc.remote,
+    menu: (entry) => [
+      { label: 'Bilgi ve izinler…', run: () => info.open(remote.path, entry, () => remote.refresh()) },
+      { label: 'Yeniden adlandır', run: () => remote.startRename(entry.name) },
+      { label: 'Sil', danger: true, run: () => remote.startDelete(entry.name) },
+    ],
     onSend: (dir, entries) => guard() && download(entries, dir, local.path),
     onDropIn: (src, dir) => guard() && src.from !== 'remote' && upload(src.entries, src.dir, dir),
     onLoaded: (n, path) => { $('st-remote').textContent = path == null ? '' : `Sunucu: ${n} öğe`; },

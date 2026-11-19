@@ -27,3 +27,11 @@ test('formatEta', () => {
   assert.strictEqual(formatEta(150), '3 dk');
   assert.strictEqual(formatEta(0), '1 sn');
 });
+
+test('izin metni ve sayısı', () => {
+  const { modeToText, textToMode } = require('../src/renderer/format');
+  assert.strictEqual(modeToText(0o644), '644');
+  assert.strictEqual(modeToText(0o7), '007');
+  assert.strictEqual(textToMode('755'), 0o755);
+  for (const bad of ['9x', '7777', '', '64', '648']) assert.strictEqual(textToMode(bad), null);
+});

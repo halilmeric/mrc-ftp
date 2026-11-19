@@ -107,3 +107,13 @@ test('yılsız liste tarihi bu yıla, gelecekteyse geçen yıla yorulur', () => 
   assert.strictEqual(parseListDate('anlamsız', now), null);
   assert.strictEqual(parseListDate('', now), null);
 });
+
+test('liste izinleri verir, chmod değiştirir', () => withServer({ files: { 'a.txt': 'x' } }, async (s) => {
+  fs.chmodSync(path.join(s.root, 'a.txt'), 0o644);
+  const ses = await openSession(cfg(s));
+  assert.strictEqual((await ses.list('/'))[0].mode, 0o644);
+  await ses.chmod('/a.txt', 0o600);
+  assert.strictEqual(fs.statSync(path.join(s.root, 'a.txt')).mode & 0o777, 0o600);
+  assert.strictEqual((await ses.list('/'))[0].mode, 0o600);
+  ses.close();
+}));

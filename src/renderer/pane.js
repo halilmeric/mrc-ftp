@@ -9,7 +9,7 @@ function progressBar(pct) {
 }
 
 // ponytail: her yenilemede tüm satırlar yeniden çizilir; on binlerce girdili klasörde yavaşlarsa sanal liste gerekir.
-function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }) {
+function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLoaded }) {
   const state = { path: null, entries: [], sort: { key: 'name', dir: 1 }, selected: new Set(), anchor: null,
     renaming: null, confirming: null, creating: false, error: '', loading: false, ghost: null, stale: false };
   let ghostNode = null;
@@ -101,14 +101,11 @@ function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }
       },
       ondragend: () => { dragSource = null; },
       oncontextmenu: (e) => {
-        if (!ops) return;
+        if (!menu) return;
         e.preventDefault();
-        state.selected = new Set([entry.name]);
+        if (!state.selected.has(entry.name)) state.selected = new Set([entry.name]);
         render();
-        showMenu(e.clientX, e.clientY, [
-          { label: 'Yeniden adlandır', run: () => { state.renaming = entry.name; render(); } },
-          { label: 'Sil', danger: true, run: () => { state.confirming = entry.name; render(); } },
-        ]);
+        showMenu(e.clientX, e.clientY, menu(entry, picked()));
       },
     }, el('div', { class: 'n' }, icon, el('span', {}, entry.name)),
     el('span', { class: 'm' }, entry.isDir ? 'klasör' : formatSize(entry.size)),
@@ -207,6 +204,8 @@ function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }
     go, refresh,
     get path() { return state.path; },
     get count() { return state.entries.length; },
+    startRename(name) { state.renaming = name; render(); },
+    startDelete(name) { state.confirming = name; render(); },
     newFolder() { if (state.path != null && ops) { state.creating = true; render(); } },
     // Yüklenen dosyanın soluk satırı: yüzde değişince yalnızca çubuk güncellenir, satırlar yeniden çizilmez.
     setGhost(ghost) {

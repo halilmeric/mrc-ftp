@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('mrc', {
   connect: call('connect'),
   trust: call('trust'),
   disconnect: call('disconnect'),
-  remote: { list: call('remote:list'), mkdir: call('remote:mkdir'), rename: call('remote:rename'), remove: call('remote:remove') },
+  remote: { list: call('remote:list'), mkdir: call('remote:mkdir'), rename: call('remote:rename'), remove: call('remote:remove'), chmod: call('remote:chmod') },
   local: { home: call('local:home'), list: call('local:list') },
   transfers: {
     add: call('transfers:add'), cancel: call('transfers:cancel'), retry: call('transfers:retry'),
