@@ -1,5 +1,6 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('node:path');
+const { registerIpc } = require('./ipc');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -18,6 +19,7 @@ function createWindow() {
   // Uzak içerik yok: gezinme ve yeni pencere reddedilir.
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  registerIpc(win);
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   return win;
 }
