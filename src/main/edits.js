@@ -52,7 +52,7 @@ function createEdits({ dir, getSession, enqueue, open, onChange, interval = 1000
       // Panelin gösterdiği liste eskimiş olabilir: boyut sınırı ve karşılaştırma temeli güncel listeden alınır.
       const fresh = (await session.list(path.posix.dirname(remotePath))).find((e) => e.name === name) || entry;
       if (fresh.size > MAX_EDIT) throw new FtpError('LOCAL', 'Düzenlemek için çok büyük, önce indir.');
-      await session.run((client) => client.downloadTo(localPath, remotePath));
+      await session.fetch(remotePath, localPath);
       await open(localPath); // açılamazsa izlemeye alınmaz
       const item = { localPath, remotePath, mark: markOf(localPath), baseline: { size: fresh.size, modified: fresh.modified } };
       item.timer = setInterval(() => check(item), interval);

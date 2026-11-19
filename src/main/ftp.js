@@ -1,3 +1,4 @@
+const fs = require('node:fs');
 const net = require('node:net');
 const { Client, FTPError } = require('basic-ftp');
 
@@ -152,9 +153,28 @@ async function openSession(cfg) {
     return next;
   };
 
+  // Kuyruk için tek denemelik aktarım: run() kopan bağlantıda işlemi yineler, aktarımda bunu istemiyoruz.
+  // Hata ham döner ki kuyruk "sunucu reddetti" (sayısal kod) ile "bağlantı koptu"yu ayırabilsin.
+  const once = (onProgress, fn) => run(async (c) => {
+    if (onProgress) c.trackProgress((info) => onProgress(info.bytes));
+    try {
+      await fn(c);
+      return null;
+    } catch (err) {
+      return err;
+    } finally {
+      c.trackProgress();
+    }
+  }).then((err) => { if (err) throw err; });
+
   return {
-    run,
-    get client() { return client; },
+    fetch: (remote, local) => run((c) => c.downloadTo(local, remote)),
+    download: (remote, local, { offset = 0, onProgress } = {}) => once(onProgress, (c) => c.downloadTo(local, remote, offset)),
+    upload: (local, remote, { offset = 0, onProgress } = {}) => once(onProgress, (c) => (offset > 0
+      ? c.appendFrom(fs.createReadStream(local, { start: offset }), remote)
+      : c.uploadFrom(local, remote))),
+    abort: () => client.close(),
+    get closed() { return client.closed; },
     list: (path) => run(async (c) => sortEntries(sanitizeEntries(await c.list(path)).map((f) => ({
       name: f.name, size: f.size, isDir: f.isDirectory, modified: toIso(f), mode: toMode(f.permissions),
     })))),

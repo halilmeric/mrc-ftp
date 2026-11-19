@@ -5,7 +5,7 @@ const PART = '.mrcftp-part';
 const FINISHED = ['done', 'skipped', 'cancelled'];
 const NO_RETRY = ['AUTH', 'CERT']; // yeniden denemek hesabı kilitleyebilir ya da anlamsızdır
 
-// Aktarım kuyruğu: aynı anda tek iş, kendi FTP oturumu. Soru bekleyen iş kuyruğu tutmaz.
+// Aktarım kuyruğu: aynı anda tek iş, kendi oturumu (FTP ya da SFTP). Soru bekleyen iş kuyruğu tutmaz.
 function createQueue({ openSession, onChange, onUploaded }) {
   const jobs = [];
   const policy = { up: null, down: null }; // "hepsine uygula" seçimi
@@ -176,29 +176,17 @@ function createQueue({ openSession, onChange, onUploaded }) {
   async function transfer(job, offset) {
     const ses = await getSession();
     job.started = true;
-    // run() kopan bağlantıda işlemi kendiliğinden yineler; aktarımda bunu istemiyoruz, hatayı değer olarak döndürürüz.
-    const failure = await ses.run(async (client) => {
-      client.trackProgress((info) => {
-        job.bytes = offset + info.bytes;
-        const now = Date.now();
-        job.samples.push([now, info.bytes]);
-        while (job.samples.length > 1 && now - job.samples[0][0] > 2000) job.samples.shift();
-        const [t0, b0] = job.samples[0];
-        job.speed = now > t0 ? Math.round(((info.bytes - b0) * 1000) / (now - t0)) : 0;
-        emitSoon();
-      });
-      try {
-        if (job.direction === 'down') await client.downloadTo(job.localPath + PART, job.remotePath, offset);
-        else if (offset > 0) await client.appendFrom(fs.createReadStream(job.localPath, { start: offset }), job.remotePath + PART);
-        else await client.uploadFrom(job.localPath, job.remotePath + PART);
-        return null;
-      } catch (err) {
-        return err;
-      } finally {
-        client.trackProgress();
-      }
-    });
-    if (failure) throw failure;
+    const onProgress = (bytes) => {
+      job.bytes = offset + bytes;
+      const now = Date.now();
+      job.samples.push([now, bytes]);
+      while (job.samples.length > 1 && now - job.samples[0][0] > 2000) job.samples.shift();
+      const [t0, b0] = job.samples[0];
+      job.speed = now > t0 ? Math.round(((bytes - b0) * 1000) / (now - t0)) : 0;
+      emitSoon();
+    };
+    if (job.direction === 'down') await ses.download(job.remotePath, job.localPath + PART, { offset, onProgress });
+    else await ses.upload(job.localPath, job.remotePath + PART, { offset, onProgress });
     if (job.cancelRequested) throw new Error('iptal');
 
     if (job.direction === 'down') {
@@ -339,7 +327,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
       if (!job || FINISHED.includes(job.state)) return;
       if (job.state === 'active') {
         job.cancelRequested = true;
-        if (session) session.client.close(); // aktarım hata ile döner, runJob "iptal" olarak işaretler
+        if (session) session.abort(); // aktarım hata ile döner, runJob "iptal" olarak işaretler
         return;
       }
       job.state = 'cancelled';
@@ -404,7 +392,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
       clearTimeout(timer);
       for (const j of jobs) if (j.state === 'active') j.cancelRequested = true;
       if (pumping) {
-        if (session) session.client.close();
+        if (session) session.abort();
       } else if (sessionPromise) {
         sessionPromise.then(() => finalize(), () => {});
       }

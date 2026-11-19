@@ -220,7 +220,7 @@ test('aktarım sürerken kapatma: geçici dosya temizlenir, oturum kapanır, bil
   await until(() => q.jobs()[0] && q.jobs()[0].state === 'active' && q.jobs()[0].bytes > 0, 20000);
   q.close();
   const count = seen.length;
-  await until(() => sessions.every((x) => x.client.closed), 20000);
+  await until(() => sessions.every((x) => x.closed), 20000);
   await new Promise((res) => setTimeout(res, 300));
   assert.deepStrictEqual(fs.readdirSync(s.root), []);
   assert.strictEqual(seen.length, count);

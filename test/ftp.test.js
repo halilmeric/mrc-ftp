@@ -117,3 +117,25 @@ test('liste izinleri verir, chmod değiştirir', () => withServer({ files: { 'a.
   assert.strictEqual((await ses.list('/'))[0].mode, 0o600);
   ses.close();
 }));
+
+test('oturum arayüzü: fetch, download/upload (başlangıç baytı ve ilerleme)', () => withServer({ files: { 'a.txt': '0123456789' } }, async (s) => {
+  const ses = await openSession(cfg(s));
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'mrc-if-'));
+  await ses.fetch('/a.txt', path.join(dir, 'f.txt'));
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'f.txt'), 'utf8'), '0123456789');
+  fs.writeFileSync(path.join(dir, 'd.txt'), '0123');
+  let seen = 0;
+  await ses.download('/a.txt', path.join(dir, 'd.txt'), { offset: 4, onProgress: (n) => { seen = n; } });
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'd.txt'), 'utf8'), '0123456789');
+  assert.strictEqual(seen, 6);
+  fs.writeFileSync(path.join(dir, 'u.txt'), 'abcdefgh');
+  await ses.upload(path.join(dir, 'u.txt'), '/u.txt');
+  fs.writeFileSync(path.join(s.root, 'yarim.txt'), 'abc');
+  await ses.upload(path.join(dir, 'u.txt'), '/yarim.txt', { offset: 3 });
+  assert.strictEqual(fs.readFileSync(path.join(s.root, 'u.txt'), 'utf8'), 'abcdefgh');
+  assert.strictEqual(fs.readFileSync(path.join(s.root, 'yarim.txt'), 'utf8'), 'abcdefgh');
+  await assert.rejects(ses.download('/yok.txt', path.join(dir, 'x')), (err) => typeof err.code === 'number');
+  ses.abort();
+  assert.strictEqual((await ses.list('/')).length, 3); // abort sonrası oturum yeniden bağlanır
+  ses.close();
+}));

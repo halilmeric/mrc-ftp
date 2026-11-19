@@ -116,7 +116,7 @@ function registerIpc(win) {
       if (Number(size) > MAX_PREVIEW) throw new FtpError('LOCAL', 'Önizlemek için çok büyük.');
       const file = path.join(tmp, 'preview', name);
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      await need().session.run((client) => client.downloadTo(file, String(remotePath)));
+      await need().session.fetch(String(remotePath), file);
       win.previewFile(file);
     },
     'transfers:add': (job) => need().queue.add(job),
