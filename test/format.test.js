@@ -56,3 +56,10 @@ test('toplu ad: çakışma, boş ve geçersiz adlar işaretlenir', () => {
   assert.deepStrictEqual(err(batchNames(['a.txt'], 'a', '..', [])).length, 1);
   assert.deepStrictEqual(err(batchNames(['a.txt', 'b.txt'], 'a', 'c', ['a.txt', 'b.txt'])), [false, false]);
 });
+
+test('toplu ad: {n} yalnızca kalıpta sayılır; harf büyüklüğü farkı çakışma sayılır', () => {
+  assert.ok(batchNames(['a{n}.txt'], '', '', []).every((r) => r.to === r.from));
+  assert.strictEqual(batchNames(['a{n}.txt'], 'a', 'b', [])[0].to, 'b{n}.txt');
+  assert.ok(batchNames(['foo.txt'], 'foo', 'barx', ['foo.txt', 'barX.txt'])[0].error);
+  assert.ok(!batchNames(['foo.txt'], 'foo', 'Foo', ['foo.txt'])[0].error, 'kendi adının harfini değiştirmek serbest');
+});

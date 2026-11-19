@@ -16,7 +16,8 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
   let running = 0; // çalışan kol sayısı
   const slots = Array.from({ length: parallel }, () => ({ ses: null, busy: false, dead: false }));
   // Aynı hedefe giden iki iş aynı geçici dosyayı yazar; aynı anda çalışmamalılar.
-  const targetOf = (j) => j.direction + ':' + (j.direction === 'up' ? j.remotePath : j.localPath);
+  // Mac'in dosya sistemi büyük/küçük harfi ve Unicode yazım biçimini ayırmaz: "a.txt" ile "A.txt" aynı dosyadır.
+  const targetOf = (j) => j.direction + ':' + (j.direction === 'up' ? j.remotePath : j.localPath.normalize('NFC').toLowerCase());
   let closing = false;
   let nextId = 1;
   let timer = null;
@@ -231,23 +232,31 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
     job.started = false;
     try {
       await getSession(); // giriş hatası kollar ayrı ayrı denemeden, tek denemede anlaşılsın
+      // İş henüz başlamadan iptal edildiyse ya da bağlantı kesiliyorsa burada durur.
+      const stopIfCancelled = () => {
+        if (!job.cancelRequested && !closing) return;
+        job.cancelRequested = true;
+        throw new Error('iptal');
+      };
       if (job.baseline) {
         // Düzenlenen dosyanın geri yüklenmesi: sunucudaki dosya indirdiğimizle aynıysa sormadan yazılır,
         // arada değiştiyse "hepsine uygula" seçimine bakılmadan sorulur.
         const now = job.decision === 'overwrite' ? null : await remoteEntry(job);
         if (now && (now.size !== job.baseline.size || now.modified !== job.baseline.modified)) {
+          stopIfCancelled();
           job.note = 'Dosya sen düzenlerken sunucuda değişmiş';
           job.state = 'asking';
           return;
         }
       } else if (job.decision !== 'overwrite' && await targetExists(job)) {
+        stopIfCancelled();
         const choice = policy[job.direction];
         if (choice === 'skip') { job.state = 'skipped'; return; }
         if (choice !== 'overwrite') { job.state = 'asking'; return; }
       }
       // Geçici dosya hedefe göre adlandırılır: bu iş onu yeniden yazacağı için aynı hedefe giden
       // başka bir yarım iş artık oradan süremez.
-      const sameTarget = (o) => o !== job && o.direction === job.direction && (job.direction === 'up' ? o.remotePath === job.remotePath : o.localPath === job.localPath);
+      const sameTarget = (o) => o !== job && targetOf(o) === targetOf(job);
       for (const other of jobs) if (sameTarget(other)) other.resumable = false;
       if (job.direction === 'up') job.total = fs.statSync(job.localPath).size; // kuyrukta beklerken dosya yeniden kaydedilmiş olabilir
       const offset = await resumeOffset(job);
@@ -257,14 +266,21 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
           slot.ses = await openSession();
         } catch (err) {
           slot.opening = false;
-          // Sunucu fazladan bağlantıyı reddetti (bağlantı sınırı): bu kol kapanır, iş sırada kalır ve öbür kollar sürdürür.
-          if (NO_RETRY.includes(err && err.code) || !slots.some((o) => o.ses || o.opening)) throw err;
-          slot.dead = true;
-          return;
+          // Sunucu fazladan bağlantıyı reddetti (bağlantı sınırı; bazı sunucular bunu giriş hatası gibi bildirir).
+          // Denetim oturumu açık olduğuna göre şifre doğrudur. Başka kol varsa bu kol kapanır ve iş sırada kalır;
+          // hiç fazladan bağlantı açılamıyorsa aktarım denetim oturumundan, tek tek yapılır.
+          if (slots.some((o) => o.ses || o.opening)) {
+            slot.dead = true;
+            job.resumable = offset > 0; // sıradaki deneme yine kaldığı yerden sürsün
+            return;
+          }
+          slot.ses = await getSession();
         }
         slot.opening = false;
       }
-      if (job.cancelRequested) throw new Error('iptal');
+      job.resumable = offset > 0; // aşağıda durursa yarım geçici dosya sahipsiz kalmasın
+      stopIfCancelled();
+      job.resumable = false;
       job.slot = slot;
       Object.assign(job, { state: 'active', bytes: offset, samples: [], started: false, keepPart: false });
       emitNow();
@@ -309,11 +325,12 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
       job.speed = 0;
       if (job.cancelRequested) {
         job.state = 'cancelled';
+        dropPart(job);
       } else {
         job.state = 'error';
         job.error = job.keepPart ? `Dosya yüklendi ama yerine taşınamadı; sunucuda ${job.name}${PART} adıyla duruyor.` : describe(err);
         if (noRetry) {
-          for (const other of jobs) if (other.state === 'queued') Object.assign(other, { state: 'error', error: job.error });
+          for (const other of jobs) if (other.state === 'queued' && !other.claimed) Object.assign(other, { state: 'error', error: job.error });
         }
       }
     }
@@ -445,7 +462,7 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
     // Hata kartını kapatır: iş listeden çıkar, yarım geçici dosyası silinir.
     dismiss(id) {
       const index = jobs.findIndex((j) => j.id === id);
-      if (index < 0 || ['active', 'queued'].includes(jobs[index].state)) return;
+      if (index < 0 || jobs[index].claimed || ['active', 'queued'].includes(jobs[index].state)) return;
       const [job] = jobs.splice(index, 1);
       emitNow();
       if (job.resumable) cleanupPart(job);

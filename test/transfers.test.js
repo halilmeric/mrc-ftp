@@ -458,3 +458,79 @@ test('eksik yüklenen dosya yerine taşınmaz; yeniden dene tamamlar', async () 
     await s.stop();
   }
 });
+
+// Sunucusuz sahte oturum: eşzamanlılık kenar durumları için.
+const fakeSession = (remote, { delay = 30 } = {}) => ({
+  list: async () => Object.keys(remote).map((name) => ({ name, size: remote[name].length, isDir: false, modified: 'x' })),
+  mkdir: async () => {}, rename: async (from, to) => { remote[to.slice(1)] = remote[from.slice(1)]; delete remote[from.slice(1)]; },
+  remove: async (p) => { delete remote[p.slice(1)]; }, size: async (p) => (remote[p.slice(1)] != null ? Buffer.byteLength(remote[p.slice(1)]) : null),
+  download: async (r, local, { onProgress } = {}) => { if (onProgress) onProgress(1); await new Promise((res) => setTimeout(res, delay)); fs.writeFileSync(local, remote[r.slice(1)]); },
+  upload: async (local, r, { onProgress } = {}) => { if (onProgress) onProgress(1); await new Promise((res) => setTimeout(res, delay)); remote[r.slice(1)] = fs.readFileSync(local, 'utf8'); },
+  abort() {}, close() {},
+});
+
+test('eşzamanlı: yalnızca harf büyüklüğü farklı iki indirme aynı dosyaya yazmaz', async () => {
+  const remote = { 'a.txt': 'küçük', 'A.txt': 'BÜYÜK' };
+  const seen = [];
+  const q = createQueue({ openSession: async () => fakeSession(remote), onChange: (jobs) => seen.push(jobs) });
+  const local = tmp();
+  q.add({ direction: 'down', localPath: path.join(local, 'a.txt'), remotePath: '/a.txt', isDir: false, size: 5 });
+  q.add({ direction: 'down', localPath: path.join(local, 'A.txt'), remotePath: '/A.txt', isDir: false, size: 5 });
+  await until(() => q.jobs().length === 2 && q.jobs().every((j) => !['queued', 'active'].includes(j.state)));
+  assert.ok(seen.every((jobs) => jobs.filter((j) => j.state === 'active').length <= 1));
+  assert.deepStrictEqual(q.jobs().map((j) => j.state), ['done', 'asking']);
+  assert.strictEqual(fs.readFileSync(path.join(local, 'a.txt'), 'utf8'), 'küçük');
+  q.close();
+});
+
+for (const code of ['FTP', 'AUTH']) {
+  test(`eşzamanlı: fazladan bağlantı hiç açılamıyorsa (${code}) denetim oturumuyla aktarır`, async () => {
+    const remote = {};
+    let calls = 0;
+    const q = createQueue({
+      openSession: async () => { calls += 1; if (calls > 1) throw new FtpError(code, 'bağlantı sınırı'); return fakeSession(remote); },
+      onChange: () => {},
+    });
+    const local = tmp();
+    for (const n of [1, 2, 3, 4]) { fs.writeFileSync(path.join(local, `f${n}.txt`), 'içerik' + n); q.add({ direction: 'up', localPath: path.join(local, `f${n}.txt`), remotePath: `/f${n}.txt`, isDir: false }); }
+    await until(() => q.jobs().length === 4 && q.jobs().every((j) => !['queued', 'active'].includes(j.state)));
+    assert.deepStrictEqual(q.jobs().map((j) => j.state), ['done', 'done', 'done', 'done']);
+    assert.strictEqual(remote['f4.txt'], 'içerik4');
+    q.close();
+  });
+}
+
+test('eşzamanlı: kapatma, bağlantısı henüz açılan işi başlatmaz', async () => {
+  const remote = {};
+  let calls = 0;
+  const q = createQueue({
+    openSession: async () => { calls += 1; if (calls > 1) await new Promise((res) => setTimeout(res, 200)); return fakeSession(remote); },
+    onChange: () => {},
+  });
+  const local = tmp();
+  fs.writeFileSync(path.join(local, 'g.txt'), 'gitmemeli');
+  q.add({ direction: 'up', localPath: path.join(local, 'g.txt'), remotePath: '/g.txt', isDir: false });
+  await until(() => calls === 2);
+  q.close();
+  await new Promise((res) => setTimeout(res, 500));
+  assert.deepStrictEqual(remote, {});
+});
+
+test('iptal: hedefi var olan ve henüz başlamamış iş soruya düşmez', async () => {
+  const remote = { 'h.txt': 'eski' };
+  let release;
+  const slowList = new Promise((res) => { release = res; });
+  const ses = fakeSession(remote);
+  const list = ses.list;
+  ses.list = async (...a) => { await slowList; return list(...a); };
+  const q = createQueue({ openSession: async () => ses, onChange: () => {} });
+  const local = tmp();
+  fs.writeFileSync(path.join(local, 'h.txt'), 'yeni');
+  q.add({ direction: 'up', localPath: path.join(local, 'h.txt'), remotePath: '/h.txt', isDir: false });
+  await new Promise((res) => setTimeout(res, 50));
+  q.cancel(q.jobs()[0].id);
+  release();
+  await until(() => q.jobs()[0].state !== 'queued');
+  assert.strictEqual(q.jobs()[0].state, 'cancelled');
+  q.close();
+});

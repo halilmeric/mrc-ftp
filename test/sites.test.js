@@ -111,3 +111,8 @@ test('sık kullanılan klasörler siteyle saklanır, düzenlemede korunur', () =
   assert.deepStrictEqual(store.save({ ...input, id: site.id, name: 'Yeni ad' }).favorites, ['/public_html', '/logs']);
   assert.deepStrictEqual(store.get(site.id).favorites, ['/public_html', '/logs']);
 });
+
+test('sık kullanılanlar: bilinmeyen site için kayıt yapılmaz', () => {
+  const store = createSiteStore({ file: tmpFile(), encrypt: enc, decrypt: dec });
+  assert.deepStrictEqual(store.setFavorites('yok', ['/a']), []);
+});

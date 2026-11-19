@@ -38,19 +38,21 @@ function batchNames(names, find, replace, taken) {
   const rows = names.map((from, i) => {
     const dot = from.lastIndexOf('.');
     const ext = dot > 0 ? from.slice(dot) : '';
-    const base = find ? from.split(find).join(replace) : replace ? replace + ext : from;
-    return { from, to: base.split('{n}').join(String(i + 1).padStart(pad, '0')), error: null };
+    const numbered = replace.split('{n}').join(String(i + 1).padStart(pad, '0')); // {n} yalnızca kalıpta sayılır
+    return { from, to: find ? from.split(find).join(numbered) : replace ? numbered + ext : from, error: null };
   });
+  // Sunucunun dosya sistemi harf büyüklüğünü ayırmıyor olabilir: çakışma kontrolü buna göre yapılır.
+  const key = (name) => name.normalize('NFC').toLowerCase();
   const count = new Map();
-  for (const r of rows) count.set(r.to, (count.get(r.to) || 0) + 1);
-  const selected = new Set(names);
-  const others = new Set(taken.filter((n) => !selected.has(n)));
+  for (const r of rows) count.set(key(r.to), (count.get(key(r.to)) || 0) + 1);
+  const selected = new Set(names.map(key));
+  const others = new Set(taken.map(key).filter((n) => !selected.has(n)));
   for (const r of rows) {
     if (r.to === r.from) continue;
     if (!r.to || r.to === '.' || r.to === '..') r.error = 'ad boş kalıyor';
     else if (/[\\/]/.test(r.to)) r.error = 'ad / içeremez';
-    else if (count.get(r.to) > 1) r.error = 'iki öğe aynı adı alıyor';
-    else if (others.has(r.to) || selected.has(r.to)) r.error = 'bu ad zaten var';
+    else if (count.get(key(r.to)) > 1) r.error = 'iki öğe aynı adı alıyor';
+    else if (others.has(key(r.to)) || (selected.has(key(r.to)) && key(r.to) !== key(r.from))) r.error = 'bu ad zaten var';
   }
   return rows;
 }

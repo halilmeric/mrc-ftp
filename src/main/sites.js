@@ -66,8 +66,10 @@ function createSiteStore({ file, encrypt, decrypt }) {
     },
     // Sık kullanılan sunucu klasörleri: yalnızca mutlak yollar, yinelenmeden, en çok 50.
     setFavorites(id, list) {
-      const favorites = [...new Set((Array.isArray(list) ? list : []).filter((p) => typeof p === 'string' && p.startsWith('/')))].slice(0, 50);
-      write(read().map((r) => (r.id === id ? { ...r, favorites } : r)));
+      const rows = read();
+      if (!rows.some((r) => r.id === id)) return [];
+      const favorites = [...new Set((Array.isArray(list) ? list : []).filter((p) => typeof p === 'string' && p.startsWith('/') && p.length <= 1024))].slice(0, 50);
+      write(rows.map((r) => (r.id === id ? { ...r, favorites } : r)));
       return favorites;
     },
     trust(id, fingerprint) {

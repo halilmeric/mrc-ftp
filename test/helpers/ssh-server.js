@@ -79,9 +79,16 @@ function startSshServer({ files = {}, slow = 0, shell = 'echo', port = 0 } = {})
     if (name.endsWith('/')) fs.mkdirSync(full, { recursive: true });
     else { fs.mkdirSync(path.dirname(full), { recursive: true }); fs.writeFileSync(full, body); }
   }
-  const host = utils.generateKeyPairSync('ed25519');
-  const plain = utils.generateKeyPairSync('ed25519');
-  const locked = utils.generateKeyPairSync('ed25519', { passphrase: 'gizli', cipher: 'aes256-ctr', rounds: 4 });
+  // ssh2 seyrek olarak kendi okuyamadığı bir anahtar üretiyor; okunabilen çıkana kadar yeniden üretilir.
+  const gen = (opts) => {
+    for (;;) {
+      const pair = utils.generateKeyPairSync('ed25519', opts);
+      if (!(utils.parseKey(pair.public) instanceof Error)) return pair;
+    }
+  };
+  const host = gen();
+  const plain = gen();
+  const locked = gen({ passphrase: 'gizli', cipher: 'aes256-ctr', rounds: 4 });
   const keyDir = tmpDir('mrc-ssh-keys-');
   fs.writeFileSync(path.join(keyDir, 'id_plain'), plain.private, { mode: 0o600 });
   fs.writeFileSync(path.join(keyDir, 'id_locked'), locked.private, { mode: 0o600 });
