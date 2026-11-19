@@ -5,7 +5,8 @@ const net = require('node:net');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { FtpSrv } = require('ftp-srv');
+const { Transform } = require('node:stream');
+const { FtpSrv, FileSystem } = require('ftp-srv');
 
 const quiet = { child() { return quiet; }, trace() {}, debug() {}, info() {}, warn() {}, error() {}, fatal() {} };
 
@@ -15,6 +16,19 @@ const freePort = () => new Promise((resolve) => {
     s.close(() => resolve(port));
   });
 });
+
+// Yüklemeyi yavaşlatır: aktarımın ortasında iptal ve kopma denenebilsin.
+class SlowFs extends FileSystem {
+  constructor(conn, opts, delay) { super(conn, opts); this.delay = delay; }
+  write(name, opts) {
+    const real = super.write(name, opts);
+    const delay = this.delay;
+    const slow = new Transform({ transform(chunk, enc, cb) { setTimeout(() => cb(null, chunk), delay); } });
+    slow.once('close', () => slow.end());
+    slow.pipe(real.stream);
+    return { stream: slow, clientPath: real.clientPath };
+  }
+}
 
 let certCache;
 function selfSigned() {
@@ -27,7 +41,7 @@ function selfSigned() {
   return certCache;
 }
 
-async function startServer({ tls = false, files = {}, port } = {}) {
+async function startServer({ tls = false, files = {}, port, slow = 0 } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-ftp-root-'));
   for (const [name, body] of Object.entries(files)) {
     const full = path.join(root, name);
@@ -45,7 +59,7 @@ async function startServer({ tls = false, files = {}, port } = {}) {
   srv.on('login', ({ connection, username, password }, resolve, reject) => {
     state.logins += 1;
     conns.add(connection);
-    if (username === 'test' && password === 'test') resolve({ root });
+    if (username === 'test' && password === 'test') resolve(slow ? { fs: new SlowFs(connection, { root, cwd: '/' }, slow) } : { root });
     else reject(new Error('Login incorrect'));
   });
   srv.on('client-error', () => {});
