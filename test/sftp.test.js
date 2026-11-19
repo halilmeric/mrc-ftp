@@ -189,3 +189,26 @@ test('SFTP kuyruk: yüklenirken değişen dosyanın son hali gider', () => withQ
   assert.strictEqual(fs.readFileSync(r('d.bin'), 'utf8'), 'yeni ve kısa');
   noParts(s.root);
 }));
+
+test('SFTP kuyruk: dosyayı aynı adlı klasörün üzerine yazmak klasörü silmez', () => withQueue({ files: { 'site/backup/a.txt': 'x', 'site/backup/derin/b.txt': 'y' } }, async ({ q, r, l }) => {
+  fs.writeFileSync(l('backup'), 'dosya');
+  await q.add({ direction: 'up', localPath: l('backup'), remotePath: '/site/backup', isDir: false });
+  await until(() => q.jobs()[0].state === 'asking');
+  q.answer(q.jobs()[0].id, 'overwrite', false);
+  await until(() => ['error', 'done'].includes(q.jobs()[0].state));
+  assert.strictEqual(q.jobs()[0].state, 'error');
+  assert.ok(fs.existsSync(r('site/backup/a.txt')) && fs.existsSync(r('site/backup/derin/b.txt')));
+}));
+
+test('SFTP: close süren işlemi yeniden bağlanmadan bitirir', () => withServer({ slow: 5, files: { 'b.bin': Buffer.alloc(4 * 1024 * 1024, 1) } }, async (s) => {
+  const ses = await openSftpSession(cfg(s));
+  const auths = s.auths;
+  const pending = ses.fetch('/b.bin', path.join(tmp(), 'b.bin'));
+  await new Promise((r) => setTimeout(r, 150));
+  ses.close();
+  await assert.rejects(pending);
+  await new Promise((r) => setTimeout(r, 400));
+  assert.strictEqual(s.conns(), 0);
+  assert.strictEqual(s.auths, auths);
+  await assert.rejects(ses.list('/'), { code: 'NET' });
+}));

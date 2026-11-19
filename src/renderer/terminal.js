@@ -114,6 +114,7 @@ function initTermPanel({ getCwd }) {
       $('btn-term').hidden = !on;
       if (!on) {
         wanted = false;
+        docked = true;
         state = 'idle';
         if (view) view.clear();
       }

@@ -199,7 +199,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
     else await ses.upload(job.localPath, job.remotePath + PART, { offset, onProgress });
     if (job.cancelRequested) throw new Error('iptal');
     // Kaynak aktarım sırasında değiştiyse geçici dosya eski ve yeni içeriğin karışımı olabilir: yerine taşınmaz.
-    if (job.direction === 'up' && sourceChanged(job)) throw new Error('kaynak değişti');
+    if (job.direction === 'up' && sourceChanged(job)) throw Object.assign(new Error('kaynak değişti'), { sourceChanged: true });
 
     if (job.direction === 'down') {
       fs.renameSync(job.localPath + PART, job.localPath);
@@ -221,6 +221,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
   const remoteEntry = async (job) => (await (await getSession()).list(path.posix.dirname(job.remotePath))).find((e) => e.name === job.name);
 
   async function runJob(job) {
+    job.started = false;
     try {
       if (job.baseline) {
         // Düzenlenen dosyanın geri yüklenmesi: sunucudaki dosya indirdiğimizle aynıysa sormadan yazılır,
@@ -260,10 +261,12 @@ function createQueue({ openSession, onChange, onUploaded }) {
     } catch (err) {
       // Dosya yüklenirken yeniden kaydedilmiş (editörde düzenlerken olağan): bu bir bağlantı hatası değildir.
       // Aynı hedefe sırada daha yeni bir yükleme varsa bu iş gereksizdir; yoksa son haliyle bir kez baştan yüklenir.
-      if (job.direction === 'up' && !job.cancelRequested && job.started && sourceChanged(job)) {
+      // (basic-ftp bunu kendi fark eder ve işaretsiz bir hata atar.)
+      const changedMidway = err && (err.sourceChanged || /changed while it was being uploaded/.test(String(err.message)));
+      if (job.direction === 'up' && !job.cancelRequested && !job.keepPart && changedMidway) {
         await cleanupPart(job);
         job.speed = 0;
-        if (jobs.some((o) => o !== job && o.state === 'queued' && o.direction === 'up' && o.remotePath === job.remotePath)) {
+        if (jobs.some((o) => o !== job && o.state === 'queued' && o.direction === 'up' && o.remotePath === job.remotePath && o.localPath === job.localPath)) {
           jobs.splice(jobs.indexOf(job), 1);
         } else if (!job.restarted) {
           Object.assign(job, { restarted: true, state: 'queued', bytes: 0 });

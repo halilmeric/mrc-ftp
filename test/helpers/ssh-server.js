@@ -118,6 +118,7 @@ function startSshServer({ files = {}, slow = 0, shell = 'echo', port = 0 } = {})
         session.on('window-change', (acc, rej, info) => { state.size = [info.cols, info.rows]; if (acc) acc(); });
         const run = (acc, rej, info) => {
           if (shell === 'refuse') return rej();
+          if (shell === 'drop') return state.drop();
           state.shells += 1;
           state.commands.push(info ? info.command : null);
           const stream = acc();

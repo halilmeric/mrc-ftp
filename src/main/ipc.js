@@ -48,7 +48,13 @@ function registerIpc(win) {
   const disconnect = () => {
     if (!active) return;
     if (active.term) active.term.close();
-    if (termWin) termWin.close();
+    if (termWin) {
+      // Pencere bağlantı kesildiği için kapanıyor: "geri takıldı" olayı gitmesin, yeni sitede terminal kendiliğinden açılmasın.
+      const w = termWin;
+      termWin = null;
+      w.removeAllListeners('closed');
+      w.close();
+    }
     active.edits.stopAll();
     active.queue.close();
     active.session.close();

@@ -1,5 +1,7 @@
 const KEEP = 1024 * 1024;
-const quote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
+// Klasör adı sunucudan gelir ve giriş kabuğu (bash, csh, fish…) bilinmez. Tek tırnak içinde her kabukta
+// düz metin kalan adlar komuta girer; tırnak, ters bölü, ünlem ya da denetim karakteri içeren ad girmez.
+const safeDir = (dir) => (typeof dir === 'string' && dir && !/['\\!\x00-\x1f\x7f]/.test(dir) ? dir : '.');
 
 // Sunucudaki kabuk oturumu. Ana süreçte yaşar; arayüz yalnızca bir görünümdür, bu yüzden
 // terminal alttan ayrılıp geri takılırken oturum kopmaz. Durumlar: idle, starting, open, closed, refused.
@@ -71,10 +73,16 @@ function createTerminal({ connect, onData, onState }) {
       };
       // Kabuk, sunucu panelinde açık olan klasörde başlar; klasöre girilemezse ev klasöründe kalır.
       // Komut çalıştırmaya izin vermeyen sunucularda düz kabuk denenir.
-      c.exec(`cd -- ${quote(cwd || '.')} 2>/dev/null; exec "\${SHELL:-/bin/sh}" -l`, { pty }, (err, ch) => {
+      // Asıl satırı /bin/sh yorumlar; giriş kabuğu yalnızca tek tırnaklı iki düz metin görür.
+      const command = `exec /bin/sh -c 'cd -- "$1" 2>/dev/null; exec "\${SHELL:-/bin/sh}" -l' sh '${safeDir(cwd)}'`;
+      c.exec(command, { pty }, (err, ch) => {
         if (!err) return opened(ch);
-        if (mine !== gen) return undefined;
-        return c.shell(pty, (err2, ch2) => (err2 ? refused() : opened(ch2)));
+        if (mine !== gen || conn !== c) return undefined; // bağlantı bu arada koptu: kapanma olayı durumu bildirir
+        try {
+          return c.shell(pty, (err2, ch2) => (err2 ? refused() : opened(ch2)));
+        } catch {
+          return undefined;
+        }
       });
     },
 

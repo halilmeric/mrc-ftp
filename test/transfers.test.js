@@ -364,3 +364,16 @@ test('yüklenirken değişen dosya: son hali gider, hata kartı kalmaz', () => s
   assert.strictEqual(fs.readFileSync(r('d.bin'), 'utf8'), 'yeni ve kısa');
   noParts(r('.'));
 }, { slow: 2 }));
+
+test('yüklenirken değişen dosya: aynı hedefe giden başka bir dosya onun yerine sayılmaz', () => setup({}, async ({ q, l }) => {
+  fs.mkdirSync(l('A')); fs.mkdirSync(l('B'));
+  fs.writeFileSync(l('A/i.bin'), pattern(8));
+  fs.writeFileSync(l('B/i.bin'), 'öteki dosya');
+  await q.add({ direction: 'up', localPath: l('A/i.bin'), remotePath: '/i.bin', isDir: false });
+  await q.add({ direction: 'up', localPath: l('B/i.bin'), remotePath: '/i.bin', isDir: false });
+  const a = q.jobs()[0].id;
+  await until(() => q.jobs()[0].state === 'active' && q.jobs()[0].bytes > 0, 20000);
+  fs.writeFileSync(l('A/i.bin'), 'A nın son hali');
+  await until(() => q.jobs().some((j) => j.state === 'asking') || q.jobs().every((j) => j.state === 'done'), 40000);
+  assert.ok(q.jobs().some((j) => j.id === a), 'A işi listeden düşmemeli');
+}, { slow: 2 }));

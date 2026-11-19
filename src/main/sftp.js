@@ -120,6 +120,7 @@ async function openSftpSession(cfg) {
   let conn = null;
   let sftp = null;
   let chain = Promise.resolve();
+  let dead = false; // close() sonrası: süren işlem yeniden bağlanıp devam etmesin
   // ssh2 bağlantı kapanınca süren akışı her zaman hatayla bitirmez; aktarım askıda kalmasın diye biz keseriz.
   const live = new Set();
   const stopLive = () => { for (const ctl of live) ctl.abort(); };
@@ -134,7 +135,9 @@ async function openSftpSession(cfg) {
   };
 
   const dial = async () => {
+    if (dead) throw new FtpError('NET', 'Bağlantı kapatıldı.');
     const c = await connectSsh(cfg);
+    if (dead) { c.destroy(); throw new FtpError('NET', 'Bağlantı kapatıldı.'); }
     c.once('close', () => { if (conn === c) { sftp = null; stopLive(); } });
     conn = c;
     try {
@@ -205,12 +208,13 @@ async function openSftpSession(cfg) {
       }
     })),
     chmod: (target, mode) => run((s) => call(s, 'chmod', target, mode & 0o777)),
-    remove: (target) => run((s) => removeTree(s, target)),
+    // Dosya diye silinmesi istenen şey klasör çıkarsa içi silinmez (FTP'deki DELE gibi reddedilir).
+    remove: (target, isDir) => run((s) => (isDir === false ? call(s, 'unlink', target) : removeTree(s, target))),
     fetch: (remote, local) => run((s) => streaming((signal) => copyDown(s, remote, local, 0, null, signal))),
     download: (remote, local, { offset = 0, onProgress } = {}) => queue((s) => streaming((signal) => copyDown(s, remote, local, offset, onProgress, signal))),
     upload: (local, remote, { offset = 0, onProgress } = {}) => queue((s) => streaming((signal) => copyUp(s, local, remote, offset, onProgress, signal))),
     abort: hangUp,
-    close: hangUp,
+    close: () => { dead = true; hangUp(); },
     get closed() { return !sftp; },
   };
 }
