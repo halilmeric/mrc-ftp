@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Terminal</title>
+<link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="termwin">
+<div class="term-head">
+  <b>Terminal</b>
+  <span id="term-note" role="status"></span>
+  <span class="grow"></span>
+  <button id="term-restart" class="mini" type="button" hidden>Yeniden başlat</button>
+  <button id="term-dock" class="mini" type="button">Geri tak</button>
+</div>
+<div class="term-wrap"><div id="term-body"></div></div>
+<script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script src="terminal.js"></script>
+<script src="termwin.js"></script>
+</body>
+</html>

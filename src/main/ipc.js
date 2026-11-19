@@ -1,10 +1,12 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { app, dialog, ipcMain, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
 const { createSiteStore } = require('./sites');
 const { openSession, FtpError } = require('./ftp');
-const { openSftpSession } = require('./sftp');
+const { openSftpSession, connectSsh } = require('./sftp');
+const { createTerminal } = require('./terminal');
+const { webPreferences, page, lock } = require('./window');
 const { createQueue } = require('./transfers');
 const localfs = require('./localfs');
 const { createEdits } = require('./edits');
@@ -24,8 +26,29 @@ function registerIpc(win) {
   fs.rmSync(tmp, { recursive: true, force: true });
   const send = (channel, value) => { if (!win.isDestroyed()) win.webContents.send(channel, value); };
 
+  // Terminal alttaki panelden ayrılınca bu pencerede görünür; oturum aynı kalır.
+  let termWin = null;
+  const sendTerm = (channel, value) => {
+    send(channel, value);
+    if (termWin && !termWin.isDestroyed()) termWin.webContents.send(channel, value);
+  };
+  const detachTerm = () => {
+    if (termWin) { termWin.focus(); return; }
+    termWin = lock(new BrowserWindow({ width: 760, height: 460, minWidth: 380, minHeight: 200, backgroundColor: '#14171e', titleBarStyle: 'hiddenInset', webPreferences }));
+    termWin.loadFile(page('terminal.html'));
+    termWin.on('closed', () => { termWin = null; send('term:docked', true); });
+    send('term:docked', false);
+  };
+  const termOf = () => {
+    const a = need();
+    if (!a.term) throw new FtpError('LOCAL', 'Terminal yalnızca SFTP sitelerinde kullanılabilir.');
+    return a.term;
+  };
+
   const disconnect = () => {
     if (!active) return;
+    if (active.term) active.term.close();
+    if (termWin) termWin.close();
     active.edits.stopAll();
     active.queue.close();
     active.session.close();
@@ -93,7 +116,12 @@ function registerIpc(win) {
         },
         onChange: (count) => send('edits:change', count),
       });
-      active = { siteId, session, queue, edits, cfg, sftp };
+      const term = sftp ? createTerminal({
+        connect: () => connectSsh(cfg),
+        onData: (data) => sendTerm('term:data', data),
+        onState: (state) => sendTerm('term:state', state),
+      }) : null;
+      active = { siteId, session, queue, edits, term, cwd: '/' };
       return { startDir: site.startDir, terminal: sftp };
     },
     'trust': (siteId, fingerprint) => store.trust(siteId, fingerprint),
@@ -132,6 +160,15 @@ function registerIpc(win) {
       await need().session.fetch(String(remotePath), file);
       win.previewFile(file);
     },
+    'term:start': ({ cols, rows, cwd }) => {
+      const term = termOf();
+      if (cwd) active.cwd = String(cwd); // ayrılan pencere klasörü bilmez: son bilinen kullanılır
+      return term.start({ cols: Number(cols) || 80, rows: Number(rows) || 24, cwd: active.cwd });
+    },
+    'term:resize': (cols, rows) => { if (active && active.term) active.term.resize(Number(cols), Number(rows)); },
+    'term:snapshot': () => termOf().snapshot(),
+    'term:detach': () => { termOf(); detachTerm(); },
+    'term:dock': () => { if (termWin) termWin.close(); },
     'transfers:add': (job) => need().queue.add(job),
     'transfers:cancel': (id) => need().queue.cancel(id),
     'transfers:retry': (id) => need().queue.retry(id),
@@ -151,6 +188,8 @@ function registerIpc(win) {
       }
     });
   }
+  ipcMain.removeAllListeners('term:input');
+  ipcMain.on('term:input', (_event, data) => { if (active && active.term) active.term.write(String(data)); });
   // Pencere kapanırken de aynı soru: yüklenmemiş düzenleme yoksa hemen kapanır.
   let leaving = false;
   win.on('close', (event) => {

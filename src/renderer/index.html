@@ -2,8 +2,9 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
 <title>MRC FTP</title>
+<link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,6 +19,7 @@
     <b id="site-name">Bağlı değil</b>
     <span id="badge" class="badge" hidden></span>
     <span class="grow"></span>
+    <button id="btn-term" class="tb" type="button" title="Terminal (⌃`)" aria-pressed="false" hidden>Terminal</button>
     <button id="btn-mkdir" class="tb" type="button" hidden>Yeni klasör</button>
     <button id="btn-refresh" class="tb" type="button">Yenile</button>
   </div>
@@ -26,6 +28,18 @@
     <section id="local" class="pane" aria-label="Mac"></section>
     <section id="remote" class="pane" aria-label="Sunucu"></section>
   </div>
+  <section id="term" aria-label="Terminal" hidden>
+    <div id="term-grip"></div>
+    <div class="term-head">
+      <b>Terminal</b>
+      <span id="term-note" role="status"></span>
+      <span class="grow"></span>
+      <button id="term-restart" class="mini" type="button" hidden>Yeniden başlat</button>
+      <button id="term-detach" class="mini" type="button">Ayır</button>
+      <button id="term-hide" class="mini" type="button">Gizle</button>
+    </div>
+    <div class="term-wrap"><div id="term-body"></div></div>
+  </section>
   <footer id="status">
     <span id="st-local"></span>
     <span id="st-remote"></span>
@@ -115,6 +129,9 @@
 <script src="ui.js"></script>
 <script src="sites.js"></script>
 <script src="info.js"></script>
+<script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script src="terminal.js"></script>
 <script src="pane.js"></script>
 <script src="tray.js"></script>
 <script src="app.js"></script>

@@ -1,6 +1,6 @@
 const { app, BrowserWindow } = require('electron');
-const path = require('node:path');
 const { registerIpc } = require('./ipc');
+const { webPreferences, page, lock } = require('./window');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -9,18 +9,11 @@ function createWindow() {
     minWidth: 900,
     minHeight: 520,
     titleBarStyle: 'hiddenInset',
-    webPreferences: {
-      preload: path.join(__dirname, '..', 'preload.js'),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-    },
+    webPreferences,
   });
-  // Uzak içerik yok: gezinme ve yeni pencere reddedilir.
-  win.webContents.on('will-navigate', (e) => e.preventDefault());
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  lock(win);
   registerIpc(win);
-  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  win.loadFile(page('index.html'));
   return win;
 }
 

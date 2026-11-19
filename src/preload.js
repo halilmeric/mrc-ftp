@@ -23,5 +23,13 @@ contextBridge.exposeInMainWorld('mrc', {
     answer: call('transfers:answer'), clearFinished: call('transfers:clearFinished'), dismiss: call('transfers:dismiss'),
     onChange: (cb) => { ipcRenderer.on('transfers:change', (_event, jobs) => cb(jobs)); },
   },
+  term: {
+    start: call('term:start'), resize: call('term:resize'), snapshot: call('term:snapshot'),
+    detach: call('term:detach'), dock: call('term:dock'),
+    input: (data) => ipcRenderer.send('term:input', data),
+    onData: (cb) => { ipcRenderer.on('term:data', (_event, data) => cb(data)); },
+    onState: (cb) => { ipcRenderer.on('term:state', (_event, state) => cb(state)); },
+    onDocked: (cb) => { ipcRenderer.on('term:docked', (_event, docked) => cb(docked)); },
+  },
   pathForFile: (file) => webUtils.getPathForFile(file),
 });

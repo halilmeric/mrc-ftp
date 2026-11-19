@@ -1,6 +1,6 @@
 # MRC FTP
 
-cPanel hostinglerine bağlanıp dosya yüklemek ve indirmek için sade bir macOS FTP/FTPS istemcisi.
+cPanel hostinglerine bağlanıp dosya yüklemek ve indirmek için sade bir macOS FTP/FTPS/SFTP istemcisi.
 
 - Solda Mac, sağda sunucu; sürükleyip bırak ya da çift tıkla.
 - Aktarımlar sağdaki panelde: ilerleme, iptal, yeniden dene, aynı adlı dosya sorusu.
@@ -11,17 +11,19 @@ cPanel hostinglerine bağlanıp dosya yüklemek ve indirmek için sade bir macOS
 - Sunucudaki dosyayı kendi editöründe düzenle: sağ tık › Düzenle; her kayıtta geri yüklenir, dosya sunucuda değiştiyse önce sorar.
 - Dosya izinleri (chmod): sağ tık › Bilgi ve izinler.
 - Boşluk tuşuyla Hızlı Bakış; ok tuşları ve Enter ile gezinme.
+- SFTP (SSH): şifre ya da SSH anahtarıyla giriş; sunucu anahtarının parmak izi ilk bağlantıda sorulur, değişirse bağlanmaz.
+- Terminal (yalnızca SFTP sitelerinde): altta açılır (⌃`), "Ayır" ile kendi penceresine çıkar; oturum kopmaz.
 
 ## Geliştirme
 
 ```bash
 npm install
 npm start      # uygulamayı aç
-npm test       # testler (yerel bir test FTP sunucusuna karşı)
+npm test       # testler (yerel test FTP ve SSH sunucularına karşı)
 npm run dist   # dist/ altında .dmg üret (Apple Silicon)
 ```
 
-Elle denemek için yerel test sunucusu: `node test/helpers/server.js --tls --port 2121` (kullanıcı `test`, şifre `test`).
+Elle denemek için yerel test sunucusu: `node test/helpers/server.js --tls --port 2121` (kullanıcı `test`, şifre `test`). SFTP ve terminal için: `node test/helpers/ssh-server.js --port 2222`.
 
 ## Kurulum
 
@@ -31,7 +33,7 @@ Uygulama Apple tarafından imzalanmamıştır (yalnızca ad-hoc imza). Derlendi�
 
 ## Yol haritası
 
-Sırada: SFTP, SSH anahtarı ve terminal; ardından eşzamanlı aktarım, sekmeler ve klasör eşitleme.
+Sırada: eşzamanlı aktarım, sekmeler, klasör eşitleme, toplu ad değiştirme, hız sınırı ve sık kullanılan klasörler.
 
 ## Lisans
 

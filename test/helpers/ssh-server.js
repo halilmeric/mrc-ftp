@@ -138,6 +138,7 @@ function startSshServer({ files = {}, slow = 0, shell = 'echo', port = 0 } = {})
       state.port = this.address().port;
       srv._srv.on('connection', (sock) => { socks.add(sock); sock.on('close', () => socks.delete(sock)); });
       state.drop = () => { for (const s of socks) s.destroy(); };
+      state.conns = () => socks.size;
       state.stop = () => new Promise((res) => { state.drop(); srv.close(() => res()); });
       resolve(state);
     });

@@ -81,9 +81,9 @@ function initSites() {
     busyId = site.id;
     render();
     try {
-      const { startDir } = await mrc.connect(site.id, password);
+      const { startDir, terminal } = await mrc.connect(site.id, password);
       activeId = site.id;
-      document.dispatchEvent(new CustomEvent('mrc:connected', { detail: { site, startDir } }));
+      document.dispatchEvent(new CustomEvent('mrc:connected', { detail: { site, startDir, terminal } }));
     } catch (err) {
       if (err.code === 'CERT') askTrust(site, err.cert, password);
       else if (err.code === 'NEED_PASSWORD') askPassword(site);

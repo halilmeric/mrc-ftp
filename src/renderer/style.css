@@ -143,3 +143,18 @@ dialog code { display: block; font: 11px/1.5 ui-monospace, Menlo, monospace; wor
 .menu button { border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: 6px; }
 .menu button:hover { background: var(--sel); }
 .menu button.d { color: var(--bad); }
+
+/* Terminal: açık temada da koyu kalır */
+#term, .termwin { --tbg: #14171e; --tfg: #e9ecf3; --tm: #9aa2b4; --tl: #2a2f3b; --tcard: #21252f; }
+#term { height: 240px; flex: none; min-height: 0; display: flex; flex-direction: column; position: relative; background: var(--tbg); color: var(--tfg); border-top: 1px solid var(--wl); }
+#term-grip { position: absolute; left: 0; right: 0; top: -4px; height: 8px; cursor: row-resize; z-index: 2; }
+.term-head { height: 34px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 14px; font-size: 12px; color: var(--tm); border-bottom: 1px solid var(--tl); }
+.term-head b { font-weight: 600; color: var(--tfg); }
+.term-head .mini { background: var(--tcard); border-color: var(--tl); color: var(--tfg); }
+.term-head .mini:hover { border-color: var(--tm); }
+.term-wrap { flex: 1; min-height: 0; padding: 8px 6px 8px 12px; user-select: text; cursor: text; }
+#term-body { height: 100%; }
+.tb[aria-pressed="true"] { background: var(--sel); border-color: var(--acc); }
+body.termwin { flex-direction: column; background: var(--tbg); color: var(--tfg); }
+body.termwin .term-head { height: 40px; padding-left: 84px; -webkit-app-region: drag; }
+body.termwin .term-head .mini { -webkit-app-region: no-drag; }

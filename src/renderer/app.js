@@ -28,6 +28,7 @@
     onPreview: (dir, entry) => mrc.preview.local(joinPath(dir, entry.name)),
   });
   const info = initInfo();
+  const termPanel = initTermPanel({ getCwd: () => remote.path });
   const remote = createPane({
     root: $('remote'), kind: 'remote', label: 'Sunucu', list: mrc.remote.list, ops: mrc.remote,
     menu: (entry, picked) => [
@@ -45,8 +46,10 @@
   });
 
   document.addEventListener('mrc:connected', async (e) => {
-    const { site, startDir } = e.detail;
+    const { site, startDir, terminal } = e.detail;
     connected = true;
+    termPanel.setEnabled(false); // önceki sitenin terminali kapanır
+    termPanel.setEnabled(Boolean(terminal));
     window.mrcTray.render([]); // önceki sitenin kartları yeni sitenin kuyruğuna karışmasın
     $('site-name').textContent = site.name;
     $('badge').hidden = false;
@@ -59,6 +62,7 @@
   });
   document.addEventListener('mrc:disconnected', () => {
     connected = false;
+    termPanel.setEnabled(false);
     $('site-name').textContent = 'Bağlı değil';
     $('badge').hidden = true;
     $('btn-mkdir').hidden = true;
