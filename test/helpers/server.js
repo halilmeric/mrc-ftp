@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { Transform } = require('node:stream');
 const { FtpSrv, FileSystem } = require('ftp-srv');
+const { tmpDir } = require('./tmp');
 
 const quiet = { child() { return quiet; }, trace() {}, debug() {}, info() {}, warn() {}, error() {}, fatal() {} };
 
@@ -26,6 +27,9 @@ class SlowFs extends FileSystem {
     const slow = new Transform({ transform(chunk, enc, cb) { setTimeout(() => cb(null, chunk), delay); } });
     slow.once('close', () => slow.end());
     slow.pipe(real.stream);
+    // ftp-srv yükleme biter bitmez akışı yok eder; gecikmeli son parça diske yazılmadan kaybolmasın.
+    const destroy = slow.destroy.bind(slow);
+    slow.destroy = (err) => (slow.writableFinished && !err ? slow : destroy(err));
     return { stream: slow, clientPath: real.clientPath };
   }
   async read(name, opts) {
@@ -41,7 +45,7 @@ class SlowFs extends FileSystem {
 let certCache;
 function selfSigned() {
   if (certCache) return certCache;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-cert-'));
+  const dir = tmpDir('mrc-cert-');
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2', '-subj', '/CN=baska-ad.test',
     '-keyout', path.join(dir, 'k.pem'), '-out', path.join(dir, 'c.pem')], { stdio: 'ignore' });
   const cert = fs.readFileSync(path.join(dir, 'c.pem'));
@@ -50,7 +54,7 @@ function selfSigned() {
 }
 
 async function startServer({ tls = false, files = {}, port, slow = 0 } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-ftp-root-'));
+  const root = tmpDir('mrc-ftp-root-');
   for (const [name, body] of Object.entries(files)) {
     const full = path.join(root, name);
     if (name.endsWith('/')) fs.mkdirSync(full, { recursive: true });

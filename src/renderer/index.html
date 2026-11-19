@@ -19,6 +19,7 @@
     <b id="site-name">Bağlı değil</b>
     <span id="badge" class="badge" hidden></span>
     <span class="grow"></span>
+    <button id="btn-fav" class="tb" type="button" aria-haspopup="menu" hidden>Sık kullanılanlar</button>
     <button id="btn-term" class="tb" type="button" title="Terminal (⌃`)" aria-pressed="false" hidden>Terminal</button>
     <button id="btn-mkdir" class="tb" type="button" hidden>Yeni klasör</button>
     <button id="btn-refresh" class="tb" type="button">Yenile</button>
@@ -125,10 +126,28 @@
   </div>
 </dialog>
 
+<dialog id="dlg-batch">
+  <form id="batch-form">
+    <h2 id="batch-title"></h2>
+    <div class="row2 even">
+      <label>Bul<input id="b-find" autocomplete="off" spellcheck="false"></label>
+      <label>Değiştir<input id="b-replace" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <p class="muted">"Bul" boşsa "Değiştir" yeni ad olur, uzantı korunur. <code class="inline">{n}</code> sıra numarasıdır.</p>
+    <div id="b-list" class="blist"></div>
+    <p id="b-err" class="err" role="alert" hidden></p>
+    <div class="acts">
+      <button id="b-cancel" type="button">Vazgeç</button>
+      <button id="b-apply" class="p" type="submit">Uygula</button>
+    </div>
+  </form>
+</dialog>
+
 <script src="format.js"></script>
 <script src="ui.js"></script>
 <script src="sites.js"></script>
 <script src="info.js"></script>
+<script src="batch.js"></script>
 <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
 <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
 <script src="terminal.js"></script>

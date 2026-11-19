@@ -28,6 +28,9 @@
     onPreview: (dir, entry) => mrc.preview.local(joinPath(dir, entry.name)),
   });
   const info = initInfo();
+  const batch = initBatch();
+  let site = null; // bağlı site
+  let favorites = [];
   const termPanel = initTermPanel({ getCwd: () => remote.path });
   const remote = createPane({
     root: $('remote'), kind: 'remote', label: 'Sunucu', list: mrc.remote.list, ops: mrc.remote,
@@ -36,7 +39,9 @@
       { label: 'İndirilenler\'e indir', run: async () => download(picked, remote.path, (await mrc.local.downloads()).path) },
       { label: 'Farklı indir…', run: async () => { const dir = await mrc.local.pickDir(); if (dir) download(picked, remote.path, dir.path); } },
       { label: 'Bilgi ve izinler…', run: () => info.open(remote.path, entry, () => remote.refresh()) },
-      { label: 'Yeniden adlandır', run: () => remote.startRename(entry.name) },
+      picked.length > 1
+        ? { label: 'Toplu yeniden adlandır…', run: () => batch.open(remote.path, picked, remote.names, () => remote.refresh()) }
+        : { label: 'Yeniden adlandır', run: () => remote.startRename(entry.name) },
       { label: 'Sil', danger: true, run: () => remote.startDelete(entry.name) },
     ].filter(Boolean),
     onPreview: (dir, entry) => mrc.preview.remote(joinPath(dir, entry.name), entry.size).catch((err) => notify(err.message)),
@@ -46,7 +51,10 @@
   });
 
   document.addEventListener('mrc:connected', async (e) => {
-    const { site, startDir, terminal } = e.detail;
+    const { startDir, terminal } = e.detail;
+    ({ site } = e.detail);
+    favorites = e.detail.favorites || [];
+    $('btn-fav').hidden = false;
     connected = true;
     termPanel.setEnabled(false); // önceki sitenin terminali kapanır
     termPanel.setEnabled(Boolean(terminal));
@@ -62,6 +70,8 @@
   });
   document.addEventListener('mrc:disconnected', () => {
     connected = false;
+    site = null;
+    $('btn-fav').hidden = true;
     termPanel.setEnabled(false);
     $('site-name').textContent = 'Bağlı değil';
     $('badge').hidden = true;
@@ -76,6 +86,22 @@
     $('st-edit-text').textContent = `${count} dosya düzenleniyor`;
   });
   $('st-edit-stop').addEventListener('click', () => mrc.edit.stopAll());
+
+  // Sık kullanılan klasörler: o sitenin kayıtlı sunucu klasörleri.
+  $('btn-fav').addEventListener('click', (e) => {
+    e.stopPropagation(); // menüyü açan tıklama onu kapatmasın
+    if (!site || remote.path == null) return;
+    const here = remote.path;
+    const saved = favorites.includes(here);
+    const toggle = async () => {
+      favorites = await mrc.sites.favorites(site.id, saved ? favorites.filter((p) => p !== here) : [...favorites, here]);
+    };
+    const box = $('btn-fav').getBoundingClientRect();
+    showMenu(box.left, box.bottom + 4, [
+      { label: saved ? 'Bu klasörü çıkar' : 'Bu klasörü ekle', run: toggle },
+      ...favorites.map((p) => ({ label: p, run: () => remote.go(p) })),
+    ]);
+  });
 
   $('btn-refresh').addEventListener('click', () => { local.refresh(); remote.refresh(); });
   $('btn-mkdir').addEventListener('click', () => remote.newFolder());

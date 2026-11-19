@@ -158,3 +158,18 @@ dialog code { display: block; font: 11px/1.5 ui-monospace, Menlo, monospace; wor
 body.termwin { flex-direction: column; background: var(--tbg); color: var(--tfg); }
 body.termwin .term-head { height: 40px; padding-left: 84px; -webkit-app-region: drag; }
 body.termwin .term-head .mini { -webkit-app-region: no-drag; }
+
+/* Hız sınırı, toplu ad değiştirme */
+.limit { font-size: 12px; height: 26px; border: 1px solid var(--wl); border-radius: 7px; background: var(--card); color: var(--wfg); padding: 0 6px; }
+dialog .row2.even { grid-template-columns: 1fr 1fr; }
+code.inline { display: inline; padding: 1px 5px; margin: 0; }
+.blist { max-height: 220px; overflow-y: auto; border: 1px solid var(--wl); border-radius: 7px; background: var(--win); padding: 6px 10px; }
+.brow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 4px 0; font-size: 12px; }
+.brow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brow i { font-style: normal; color: var(--wm); }
+.brow small { grid-column: 1 / -1; color: var(--bad); }
+.brow.same { color: var(--wm); }
+.brow.bad span:last-of-type { color: var(--bad); }
+.acts button:disabled { opacity: .5; }
+.menu { max-width: 360px; }
+.menu button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

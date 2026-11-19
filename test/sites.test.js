@@ -4,10 +4,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createSiteStore } = require('../src/main/sites');
+const { tmpDir } = require('./helpers/tmp');
 
 const enc = (s) => 'ENC:' + s;
 const dec = (s) => s.slice(4);
-const tmpFile = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-sites-')), 'sites.json');
+const tmpFile = () => path.join(tmpDir('mrc-sites-'), 'sites.json');
 const input = { name: 'Örnek', host: 'ftp.ornek.com', user: 'ali', password: 'gizli-123' };
 
 test('kaydedilen site listede şifresiz görünür', () => {
@@ -100,4 +101,13 @@ test('eski kayıt ftp sayılır; protokol değişince parmak izi sıfırlanır',
   assert.strictEqual(same.fingerprint, 'AA');
   const moved = store.save({ id: 'eski', host: 'a.com', port: 21, user: 'u', protocol: 'sftp' });
   assert.strictEqual(moved.fingerprint, null);
+});
+
+test('sık kullanılan klasörler siteyle saklanır, düzenlemede korunur', () => {
+  const store = createSiteStore({ file: tmpFile(), encrypt: enc, decrypt: dec });
+  const site = store.save(input);
+  assert.deepStrictEqual(site.favorites, []);
+  assert.deepStrictEqual(store.setFavorites(site.id, ['/public_html', '/public_html', 'göreli', 5, '/logs']), ['/public_html', '/logs']);
+  assert.deepStrictEqual(store.save({ ...input, id: site.id, name: 'Yeni ad' }).favorites, ['/public_html', '/logs']);
+  assert.deepStrictEqual(store.get(site.id).favorites, ['/public_html', '/logs']);
 });

@@ -17,7 +17,7 @@ function createSiteStore({ file, encrypt, decrypt }) {
     fs.renameSync(tmp, file);
   };
   // Sürüm 3 öncesi kayıtlarda protokol alanı yoktur: FTP sayılır.
-  const pub = ({ secret, ...row }) => ({ protocol: 'ftp', auth: 'password', keyPath: null, ...row, hasPassword: Boolean(secret) });
+  const pub = ({ secret, ...row }) => ({ protocol: 'ftp', auth: 'password', keyPath: null, favorites: [], ...row, hasPassword: Boolean(secret) });
 
   return {
     list: () => read().map(pub),
@@ -49,6 +49,7 @@ function createSiteStore({ file, encrypt, decrypt }) {
         keyPath: auth === 'key' ? String(input.keyPath || '') : null, // anahtarın yalnızca yolu saklanır
         secure: protocol === 'sftp' || input.secure !== false,
         startDir: input.startDir || '/',
+        favorites: (old && old.favorites) || [],
         fingerprint: old ? old.fingerprint : null,
         secret: old ? old.secret : null,
       };
@@ -62,6 +63,12 @@ function createSiteStore({ file, encrypt, decrypt }) {
     },
     remove(id) {
       write(read().filter((r) => r.id !== id));
+    },
+    // Sık kullanılan sunucu klasörleri: yalnızca mutlak yollar, yinelenmeden, en çok 50.
+    setFavorites(id, list) {
+      const favorites = [...new Set((Array.isArray(list) ? list : []).filter((p) => typeof p === 'string' && p.startsWith('/')))].slice(0, 50);
+      write(read().map((r) => (r.id === id ? { ...r, favorites } : r)));
+      return favorites;
     },
     trust(id, fingerprint) {
       write(read().map((r) => (r.id === id ? { ...r, fingerprint } : r)));

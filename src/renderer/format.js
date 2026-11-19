@@ -31,4 +31,28 @@ function formatEta(seconds) {
 const modeToText = (mode) => (mode & 0o777).toString(8).padStart(3, '0');
 const textToMode = (text) => (/^[0-7]{3}$/.test(text) ? parseInt(text, 8) : null);
 
-if (typeof module !== 'undefined') module.exports = { formatSize, formatDate, formatEta, modeToText, textToMode };
+// Toplu ad değiştirme: "bul" doluysa bul → değiştir; boşsa "değiştir" yeni ad kalıbıdır ve uzantı korunur.
+// {n} sıra numarasıdır. Dönen her satır { from, to, error }; error doluysa o ad uygulanamaz.
+function batchNames(names, find, replace, taken) {
+  const pad = String(names.length).length;
+  const rows = names.map((from, i) => {
+    const dot = from.lastIndexOf('.');
+    const ext = dot > 0 ? from.slice(dot) : '';
+    const base = find ? from.split(find).join(replace) : replace ? replace + ext : from;
+    return { from, to: base.split('{n}').join(String(i + 1).padStart(pad, '0')), error: null };
+  });
+  const count = new Map();
+  for (const r of rows) count.set(r.to, (count.get(r.to) || 0) + 1);
+  const selected = new Set(names);
+  const others = new Set(taken.filter((n) => !selected.has(n)));
+  for (const r of rows) {
+    if (r.to === r.from) continue;
+    if (!r.to || r.to === '.' || r.to === '..') r.error = 'ad boş kalıyor';
+    else if (/[\\/]/.test(r.to)) r.error = 'ad / içeremez';
+    else if (count.get(r.to) > 1) r.error = 'iki öğe aynı adı alıyor';
+    else if (others.has(r.to) || selected.has(r.to)) r.error = 'bu ad zaten var';
+  }
+  return rows;
+}
+
+if (typeof module !== 'undefined') module.exports = { formatSize, formatDate, formatEta, modeToText, textToMode, batchNames };

@@ -102,17 +102,19 @@ async function removeTree(sftp, target) {
 
 // ponytail: aktarım sıralı akışla yapılır (istek başına bir parça). Yarım dosyada boşluk kalmadığı için
 // sürdürme güvenlidir, ama gecikmesi yüksek hatlarda yavaştır; hız gerekirse sıralı ama boru hatlı okuma/yazma.
-async function copyDown(sftp, remote, local, offset, onProgress, signal) {
+async function copyDown(sftp, remote, local, offset, onProgress, signal, limiter) {
   const src = sftp.createReadStream(remote, { start: offset });
   let bytes = 0;
   if (onProgress) src.on('data', (chunk) => { bytes += chunk.length; onProgress(bytes); });
-  await pipeline(src, fs.createWriteStream(local, offset ? { flags: 'r+', start: offset } : {}), { signal });
+  const dst = fs.createWriteStream(local, offset ? { flags: 'r+', start: offset } : {});
+  await pipeline(...(limiter ? [src, limiter.stream(), dst] : [src, dst]), { signal });
 }
-async function copyUp(sftp, local, remote, offset, onProgress, signal) {
+async function copyUp(sftp, local, remote, offset, onProgress, signal, limiter) {
   const src = fs.createReadStream(local, { start: offset });
   let bytes = 0;
   if (onProgress) src.on('data', (chunk) => { bytes += chunk.length; onProgress(bytes); });
-  await pipeline(src, sftp.createWriteStream(remote, offset ? { flags: 'r+', start: offset } : {}), { signal });
+  const dst = sftp.createWriteStream(remote, offset ? { flags: 'r+', start: offset } : {});
+  await pipeline(...(limiter ? [src, limiter.stream(), dst] : [src, dst]), { signal });
 }
 
 // ftp.js'teki oturumla aynı arayüz; kuyruk, düzenleme ve önizleme ikisini ayırt etmez.
@@ -211,8 +213,9 @@ async function openSftpSession(cfg) {
     // Dosya diye silinmesi istenen şey klasör çıkarsa içi silinmez (FTP'deki DELE gibi reddedilir).
     remove: (target, isDir) => run((s) => (isDir === false ? call(s, 'unlink', target) : removeTree(s, target))),
     fetch: (remote, local) => run((s) => streaming((signal) => copyDown(s, remote, local, 0, null, signal))),
-    download: (remote, local, { offset = 0, onProgress } = {}) => queue((s) => streaming((signal) => copyDown(s, remote, local, offset, onProgress, signal))),
-    upload: (local, remote, { offset = 0, onProgress } = {}) => queue((s) => streaming((signal) => copyUp(s, local, remote, offset, onProgress, signal))),
+    download: (remote, local, { offset = 0, onProgress } = {}) => queue((s) => streaming((signal) => copyDown(s, remote, local, offset, onProgress, signal, cfg.limiter))),
+    upload: (local, remote, { offset = 0, onProgress } = {}) => queue((s) => streaming((signal) => copyUp(s, local, remote, offset, onProgress, signal, cfg.limiter))),
+    size: (target) => run((s) => call(s, 'stat', target)).then((attrs) => attrs.size, () => null),
     abort: hangUp,
     close: () => { dead = true; hangUp(); },
     get closed() { return !sftp; },

@@ -35,3 +35,24 @@ test('izin metni ve sayısı', () => {
   assert.strictEqual(textToMode('755'), 0o755);
   for (const bad of ['9x', '7777', '', '64', '648']) assert.strictEqual(textToMode(bad), null);
 });
+
+const { batchNames } = require('../src/renderer/format');
+
+test('toplu ad: bul-değiştir, kalıp, numara ve uzantı', () => {
+  assert.deepStrictEqual(batchNames(['IMG_1.jpg', 'IMG_2.jpg'], 'IMG_', 'foto-', []).map((r) => r.to), ['foto-1.jpg', 'foto-2.jpg']);
+  assert.deepStrictEqual(batchNames(['b.png', 'a.tar.gz', 'LICENSE'], '', 'dosya-{n}', []).map((r) => r.to), ['dosya-1.png', 'dosya-2.gz', 'dosya-3']);
+  const many = batchNames(Array.from({ length: 12 }, (_, i) => `x${i}.txt`), '', 'y{n}', []);
+  assert.deepStrictEqual([many[0].to, many[11].to], ['y01.txt', 'y12.txt']);
+  assert.ok(batchNames(['a.txt'], '', '', []).every((r) => r.to === r.from && !r.error), 'boş kalıp adı değiştirmez');
+});
+
+test('toplu ad: çakışma, boş ve geçersiz adlar işaretlenir', () => {
+  const err = (rows) => rows.map((r) => Boolean(r.error));
+  assert.deepStrictEqual(err(batchNames(['a1.txt', 'a2.txt'], '1', '2', [])), [true, false], 'seçili başka bir öğenin adı');
+  assert.deepStrictEqual(err(batchNames(['a.txt', 'b.txt'], '', 'ayni', [])), [true, true], 'iki öğe aynı ada');
+  assert.deepStrictEqual(err(batchNames(['a.txt'], 'a', 'var', ['a.txt', 'var.txt'])), [true], 'klasörde zaten var');
+  assert.deepStrictEqual(err(batchNames(['a'], 'a', '', [])), [true], 'boş ad');
+  assert.deepStrictEqual(err(batchNames(['a.txt'], 'a', 'x/y', [])), [true], 'yol ayırıcı');
+  assert.deepStrictEqual(err(batchNames(['a.txt'], 'a', '..', [])).length, 1);
+  assert.deepStrictEqual(err(batchNames(['a.txt', 'b.txt'], 'a', 'c', ['a.txt', 'b.txt'])), [false, false]);
+});

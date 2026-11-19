@@ -4,9 +4,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const localfs = require('../src/main/localfs');
+const { tmpDir } = require('./helpers/tmp');
 
 test('yerel liste: klasörler önce, gizli dosya yok', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-lfs-'));
+  const dir = tmpDir('mrc-lfs-');
   fs.writeFileSync(path.join(dir, 'b.txt'), '12345');
   fs.writeFileSync(path.join(dir, '.gizli'), 'x');
   fs.mkdirSync(path.join(dir, 'klasör'));

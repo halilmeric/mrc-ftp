@@ -208,6 +208,9 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
     if (job.direction === 'down') {
       fs.renameSync(job.localPath + PART, job.localPath);
     } else {
+      // Sunucu "tamam" dese de geçici dosya eksikse asıl dosyanın yerine konmaz; hata, "Yeniden dene" ile kaldığı yerden sürer.
+      const sent = await (await getSession()).size(job.remotePath + PART);
+      if (sent != null && sent !== job.total) throw new Error('eksik yüklendi');
       await moveIntoPlace(job);
       const names = known.get(path.posix.dirname(job.remotePath));
       if (names) names.add(job.name);

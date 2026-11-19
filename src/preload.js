@@ -7,7 +7,7 @@ const call = (channel) => async (...args) => {
 };
 
 contextBridge.exposeInMainWorld('mrc', {
-  sites: { list: call('sites:list'), save: call('sites:save'), remove: call('sites:remove') },
+  sites: { list: call('sites:list'), save: call('sites:save'), remove: call('sites:remove'), favorites: call('sites:favorites') },
   connect: call('connect'),
   trust: call('trust'),
   disconnect: call('disconnect'),
@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld('mrc', {
   preview: { local: call('preview:local'), remote: call('preview:remote') },
   transfers: {
     add: call('transfers:add'), cancel: call('transfers:cancel'), retry: call('transfers:retry'),
-    answer: call('transfers:answer'), clearFinished: call('transfers:clearFinished'), dismiss: call('transfers:dismiss'),
+    answer: call('transfers:answer'), clearFinished: call('transfers:clearFinished'), dismiss: call('transfers:dismiss'), setLimit: call('transfers:setLimit'),
     onChange: (cb) => { ipcRenderer.on('transfers:change', (_event, jobs) => cb(jobs)); },
   },
   term: {

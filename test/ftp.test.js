@@ -5,6 +5,7 @@ const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { openSession, sanitizeEntries, pinDataSockets } = require('../src/main/ftp');
 const { startServer } = require('./helpers/server');
+const { tmpDir } = require('./helpers/tmp');
 
 const cfg = (s, extra = {}) => ({ host: '127.0.0.1', port: s.port, user: s.user, password: s.password, secure: false, fingerprint: null, ...extra });
 async function withServer(opts, fn) {
@@ -120,7 +121,7 @@ test('liste izinleri verir, chmod değiştirir', () => withServer({ files: { 'a.
 
 test('oturum arayüzü: fetch, download/upload (başlangıç baytı ve ilerleme)', () => withServer({ files: { 'a.txt': '0123456789' } }, async (s) => {
   const ses = await openSession(cfg(s));
-  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'mrc-if-'));
+  const dir = tmpDir('mrc-if-');
   await ses.fetch('/a.txt', path.join(dir, 'f.txt'));
   assert.strictEqual(fs.readFileSync(path.join(dir, 'f.txt'), 'utf8'), '0123456789');
   fs.writeFileSync(path.join(dir, 'd.txt'), '0123');

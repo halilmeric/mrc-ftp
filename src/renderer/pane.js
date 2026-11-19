@@ -231,6 +231,7 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
     go, refresh,
     get path() { return state.path; },
     get count() { return state.entries.length; },
+    get names() { return state.entries.map((e) => e.name); },
     startRename(name) { state.renaming = name; render(); },
     startDelete(name) { state.confirming = name; render(); },
     newFolder() { if (state.path != null && ops) { state.creating = true; render(); } },

@@ -6,8 +6,9 @@ const path = require('node:path');
 const { openSftpSession } = require('../src/main/sftp');
 const { createQueue } = require('../src/main/transfers');
 const { startSshServer } = require('./helpers/ssh-server');
+const { tmpDir } = require('./helpers/tmp');
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-sftp-local-'));
+const tmp = () => tmpDir('mrc-sftp-local-');
 const cfg = (s, extra = {}) => ({ host: '127.0.0.1', port: s.port, user: s.user, password: s.password, fingerprint: s.fingerprint, ...extra });
 const until = async (fn, ms = 8000) => {
   const end = Date.now() + ms;

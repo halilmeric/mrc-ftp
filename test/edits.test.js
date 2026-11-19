@@ -7,6 +7,7 @@ const { openSession } = require('../src/main/ftp');
 const { createQueue } = require('../src/main/transfers');
 const { createEdits } = require('../src/main/edits');
 const { startServer } = require('./helpers/server');
+const { tmpDir } = require('./helpers/tmp');
 
 const until = async (fn, ms = 8000) => {
   const end = Date.now() + ms;
@@ -20,7 +21,7 @@ async function setup(files, fn, opts = {}) {
   const s = await startServer({ files, ...opts });
   const connect = () => openSession({ host: '127.0.0.1', port: s.port, user: s.user, password: s.password, secure: false });
   const session = await connect();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-edit-'));
+  const dir = tmpDir('mrc-edit-');
   const opened = [];
   const counts = [];
   let edits;

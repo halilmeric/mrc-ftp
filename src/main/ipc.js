@@ -10,6 +10,7 @@ const { webPreferences, page, lock } = require('./window');
 const { createQueue } = require('./transfers');
 const localfs = require('./localfs');
 const { createEdits } = require('./edits');
+const { createLimiter } = require('./throttle');
 
 const MAX_PREVIEW = 50 * 1024 * 1024;
 
@@ -20,6 +21,7 @@ function registerIpc(win) {
     encrypt: (text) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text).toString('base64') : null),
     decrypt: (blob) => safeStorage.decryptString(Buffer.from(blob, 'base64')),
   });
+  const limiter = createLimiter(); // hız sınırı bağlantıdan bağımsızdır
   let active = null; // { siteId, session, queue, edits }
   // Düzenleme ve önizleme kopyaları burada durur; bağlantı kesilince ve açılışta silinir.
   const tmp = path.join(app.getPath('temp'), 'mrc-ftp');
@@ -109,7 +111,7 @@ function registerIpc(win) {
       disconnect();
       let edits = null;
       const queue = createQueue({
-        openSession: () => open(cfg),
+        openSession: () => open({ ...cfg, limiter }),
         onChange: (jobs) => send('transfers:change', jobs),
         onUploaded: (remotePath, baseline) => edits.updateBaseline(remotePath, baseline),
       });
@@ -128,8 +130,9 @@ function registerIpc(win) {
         onState: (state) => sendTerm('term:state', state),
       }) : null;
       active = { siteId, session, queue, edits, term, cwd: '/' };
-      return { startDir: site.startDir, terminal: sftp };
+      return { startDir: site.startDir, terminal: sftp, favorites: site.favorites };
     },
+    'sites:favorites': (id, list) => store.setFavorites(String(id), list),
     'trust': (siteId, fingerprint) => store.trust(siteId, fingerprint),
     'disconnect': async () => { await leaveOrThrow(); disconnect(); },
     'remote:list': (p) => need().session.list(p),
@@ -175,6 +178,7 @@ function registerIpc(win) {
     'term:snapshot': () => termOf().snapshot(),
     'term:detach': () => { termOf(); detachTerm(); },
     'term:dock': () => { if (termWin) termWin.close(); },
+    'transfers:setLimit': (bytesPerSec) => { limiter.set(Math.min(Number(bytesPerSec) || 0, 1e9)); },
     'transfers:add': (job) => need().queue.add(job),
     'transfers:cancel': (id) => need().queue.cancel(id),
     'transfers:retry': (id) => need().queue.retry(id),

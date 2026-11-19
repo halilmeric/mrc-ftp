@@ -6,8 +6,9 @@ const path = require('node:path');
 const { openSession } = require('../src/main/ftp');
 const { createQueue } = require('../src/main/transfers');
 const { startServer } = require('./helpers/server');
+const { tmpDir } = require('./helpers/tmp');
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-local-'));
+const tmp = () => tmpDir('mrc-local-');
 const until = async (fn, ms = 8000) => {
   const end = Date.now() + ms;
   while (!fn()) {
@@ -417,6 +418,41 @@ test('eşzamanlı: sunucu fazladan bağlantıyı reddederse daha az bağlantıyl
     }
     await until(() => q.jobs().length === 3 && q.jobs().every((j) => j.state === 'done'), 60000);
     for (const n of [1, 2, 3]) assert.ok(fs.readFileSync(path.join(s.root, `k${n}.bin`)).equals(pattern(n)));
+  } finally {
+    q.close();
+    await s.stop();
+  }
+});
+
+test('eksik yüklenen dosya yerine taşınmaz; yeniden dene tamamlar', async () => {
+  const s = await startServer({ files: { 'v.bin': 'eski' } });
+  let cut = true;
+  const q = createQueue({
+    openSession: async () => {
+      const real = await openSession({ host: '127.0.0.1', port: s.port, user: s.user, password: s.password, secure: false });
+      // Sunucu ilk yüklemede dosyanın sonunu kaybeder ama başarı bildirir.
+      const upload = async (local, remote, opts) => {
+        await real.upload(local, remote, opts);
+        if (cut) { cut = false; fs.truncateSync(path.join(s.root, remote), 1000); }
+      };
+      return new Proxy(real, { get: (t, k) => (k === 'upload' ? upload : t[k]) });
+    },
+    onChange: () => {},
+  });
+  const local = tmp();
+  const data = Buffer.alloc(200000, 3).map((_, i) => i % 251);
+  fs.writeFileSync(path.join(local, 'v.bin'), data);
+  try {
+    await q.add({ direction: 'up', localPath: path.join(local, 'v.bin'), remotePath: '/v.bin', isDir: false });
+    await until(() => q.jobs()[0].state === 'asking');
+    q.answer(q.jobs()[0].id, 'overwrite', false);
+    await until(() => ['error', 'done'].includes(q.jobs()[0].state));
+    assert.strictEqual(q.jobs()[0].state, 'error');
+    assert.strictEqual(fs.readFileSync(path.join(s.root, 'v.bin'), 'utf8'), 'eski');
+    q.retry(q.jobs()[0].id);
+    await until(() => ['error', 'done'].includes(q.jobs()[0].state));
+    assert.strictEqual(q.jobs()[0].state, 'done');
+    assert.ok(fs.readFileSync(path.join(s.root, 'v.bin')).equals(data));
   } finally {
     q.close();
     await s.stop();

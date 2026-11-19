@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { Server, utils } = require('ssh2');
+const { tmpDir } = require('./tmp');
 
 const { STATUS_CODE: ST, flagsToString } = utils.sftp;
 const attrsOf = (st) => ({ mode: st.mode, uid: st.uid, gid: st.gid, size: st.size, atime: Math.floor(st.atimeMs / 1000), mtime: Math.floor(st.mtimeMs / 1000) });
@@ -72,7 +73,7 @@ function serveSftp(sftp, root, slow) {
 }
 
 function startSshServer({ files = {}, slow = 0, shell = 'echo', port = 0 } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-ssh-root-'));
+  const root = tmpDir('mrc-ssh-root-');
   for (const [name, body] of Object.entries(files)) {
     const full = path.join(root, name);
     if (name.endsWith('/')) fs.mkdirSync(full, { recursive: true });
@@ -81,7 +82,7 @@ function startSshServer({ files = {}, slow = 0, shell = 'echo', port = 0 } = {})
   const host = utils.generateKeyPairSync('ed25519');
   const plain = utils.generateKeyPairSync('ed25519');
   const locked = utils.generateKeyPairSync('ed25519', { passphrase: 'gizli', cipher: 'aes256-ctr', rounds: 4 });
-  const keyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-ssh-keys-'));
+  const keyDir = tmpDir('mrc-ssh-keys-');
   fs.writeFileSync(path.join(keyDir, 'id_plain'), plain.private, { mode: 0o600 });
   fs.writeFileSync(path.join(keyDir, 'id_locked'), locked.private, { mode: 0o600 });
   const allowed = [plain, locked].map((k) => utils.parseKey(k.public));

@@ -21,7 +21,21 @@ function createTray({ root, panes }) {
   const totalPct = el('span');
   const totalEta = el('span');
   const list = el('div', { class: 'jobs' });
-  root.append(el('div', { class: 'tray-head' }, el('b', {}, 'Aktarımlar'), head),
+  // Hız sınırı: tüm eşzamanlı aktarımların toplamına uygulanır ve hatırlanır.
+  const LIMITS = [[0, 'Sınırsız'], [100 * 1024, '100 KB/sn'], [500 * 1024, '500 KB/sn'], [1024 * 1024, '1 MB/sn'], [5 * 1024 * 1024, '5 MB/sn']];
+  const limit = el('select', { class: 'limit', 'aria-label': 'Hız sınırı', title: 'Hız sınırı' }, LIMITS.map(([v, t]) => el('option', { value: v }, t)));
+  try {
+    limit.value = localStorage.getItem('mrc.limit') || '0';
+  } catch {
+    // saklama kapalıysa sınırsız başlar
+  }
+  if (limit.selectedIndex < 0) limit.value = '0';
+  mrc.transfers.setLimit(Number(limit.value));
+  limit.addEventListener('change', () => {
+    mrc.transfers.setLimit(Number(limit.value));
+    try { localStorage.setItem('mrc.limit', limit.value); } catch { /* yalnızca hatırlanmaz */ }
+  });
+  root.append(el('div', { class: 'tray-head' }, el('b', {}, 'Aktarımlar'), head, el('span', { class: 'grow' }), limit),
     el('div', { class: 'total' }, totalBar, el('small', {}, totalPct, totalEta)), list);
 
   const activeText = (job) => {

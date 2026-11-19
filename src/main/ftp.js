@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const net = require('node:net');
+const { finished } = require('node:stream/promises');
 const { Client, FTPError } = require('basic-ftp');
 
 class FtpError extends Error {
@@ -167,12 +168,45 @@ async function openSession(cfg) {
     }
   }).then((err) => { if (err) throw err; });
 
+  // Hız sınırı açıkken veri sınırlayıcı bir akıştan geçer. Sınır yokken basic-ftp'nin kendi dosya yolu kullanılır;
+  // bu yüzden FTP'de yeni sınır o an süren dosyada değil, sıradaki dosyada geçerli olur.
+  const limited = () => Boolean(cfg.limiter && cfg.limiter.rate > 0);
+  async function slowDown(c, remote, local, offset) {
+    const file = fs.createWriteStream(local, offset ? { flags: 'r+', start: offset } : {});
+    const gate = cfg.limiter.stream();
+    file.on('error', (err) => gate.destroy(err));
+    gate.pipe(file);
+    try {
+      await c.downloadTo(gate, remote, offset);
+      await finished(file);
+    } finally {
+      gate.destroy();
+      file.destroy();
+    }
+  }
+  async function slowUp(c, local, remote, offset) {
+    await fs.promises.access(local, fs.constants.R_OK); // okunamayan dosya sunucuya boş dosya açmadan anlaşılsın
+    const src = fs.createReadStream(local, { start: offset });
+    const gate = cfg.limiter.stream();
+    src.on('error', (err) => gate.destroy(err));
+    src.pipe(gate);
+    try {
+      await (offset > 0 ? c.appendFrom(gate, remote) : c.uploadFrom(gate, remote));
+    } finally {
+      src.destroy();
+      gate.destroy();
+    }
+  }
+
   return {
     fetch: (remote, local) => run((c) => c.downloadTo(local, remote)),
-    download: (remote, local, { offset = 0, onProgress } = {}) => once(onProgress, (c) => c.downloadTo(local, remote, offset)),
-    upload: (local, remote, { offset = 0, onProgress } = {}) => once(onProgress, (c) => (offset > 0
-      ? c.appendFrom(fs.createReadStream(local, { start: offset }), remote)
-      : c.uploadFrom(local, remote))),
+    download: (remote, local, { offset = 0, onProgress } = {}) => once(onProgress, (c) => (limited() ? slowDown(c, remote, local, offset) : c.downloadTo(local, remote, offset))),
+    upload: (local, remote, { offset = 0, onProgress } = {}) => once(onProgress, (c) => {
+      if (limited()) return slowUp(c, local, remote, offset);
+      return offset > 0 ? c.appendFrom(fs.createReadStream(local, { start: offset }), remote) : c.uploadFrom(local, remote);
+    }),
+    // Dosyanın sunucudaki boyutu; sunucu SIZE desteklemiyorsa ya da dosya yoksa null.
+    size: (path) => run((c) => c.size(path)).catch(() => null),
     abort: () => client.close(),
     get closed() { return client.closed; },
     list: (path) => run(async (c) => sortEntries(sanitizeEntries(await c.list(path)).map((f) => ({
