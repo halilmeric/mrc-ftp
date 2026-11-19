@@ -178,3 +178,14 @@ test('SFTP kuyruk: iptal geçici dosyayı siler', () => withQueue({ slow: 3 }, a
   await until(() => q.jobs()[0].state === 'cancelled', 20000);
   await until(() => fs.readdirSync(s.root).length === 0, 5000);
 }));
+
+test('SFTP kuyruk: yüklenirken değişen dosyanın son hali gider', () => withQueue({ slow: 3 }, async ({ q, s, l, r }) => {
+  fs.writeFileSync(l('d.bin'), pattern(7));
+  await q.add({ direction: 'up', localPath: l('d.bin'), remotePath: '/d.bin', isDir: false });
+  await until(() => q.jobs()[0].state === 'active' && q.jobs()[0].bytes > 0, 20000);
+  fs.writeFileSync(l('d.bin'), 'yeni ve kısa');
+  await until(() => q.jobs().every((j) => j.state === 'done'), 40000);
+  assert.strictEqual(q.jobs().length, 1);
+  assert.strictEqual(fs.readFileSync(r('d.bin'), 'utf8'), 'yeni ve kısa');
+  noParts(s.root);
+}));

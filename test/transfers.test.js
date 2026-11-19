@@ -353,3 +353,14 @@ test('atlanan ya da sırada iptal edilen yarım işin geçici dosyası silinir',
   q.cancel(q.jobs()[0].id);
   await until(() => fs.readdirSync(s.root).length === 0, 10000);
 }, { slow: 4 }));
+
+test('yüklenirken değişen dosya: son hali gider, hata kartı kalmaz', () => setup({}, async ({ q, l, r }) => {
+  fs.writeFileSync(l('d.bin'), pattern(7));
+  await q.add({ direction: 'up', localPath: l('d.bin'), remotePath: '/d.bin', isDir: false });
+  await until(() => q.jobs()[0].state === 'active' && q.jobs()[0].bytes > 0, 20000);
+  fs.writeFileSync(l('d.bin'), 'yeni ve kısa');
+  await until(() => q.jobs().every((j) => j.state === 'done'), 40000);
+  assert.strictEqual(q.jobs().length, 1);
+  assert.strictEqual(fs.readFileSync(r('d.bin'), 'utf8'), 'yeni ve kısa');
+  noParts(r('.'));
+}, { slow: 2 }));

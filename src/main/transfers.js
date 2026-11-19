@@ -174,6 +174,15 @@ function createQueue({ openSession, onChange, onUploaded }) {
     return offset;
   }
 
+  const sourceChanged = (job) => {
+    try {
+      const st = fs.statSync(job.localPath);
+      return `${st.size}:${st.mtimeMs}` !== job.sourceMark;
+    } catch {
+      return false; // dosya yoksa bu ayrı bir hatadır
+    }
+  };
+
   async function transfer(job, offset) {
     const ses = await getSession();
     job.started = true;
@@ -189,6 +198,8 @@ function createQueue({ openSession, onChange, onUploaded }) {
     if (job.direction === 'down') await ses.download(job.remotePath, job.localPath + PART, { offset, onProgress });
     else await ses.upload(job.localPath, job.remotePath + PART, { offset, onProgress });
     if (job.cancelRequested) throw new Error('iptal');
+    // Kaynak aktarım sırasında değiştiyse geçici dosya eski ve yeni içeriğin karışımı olabilir: yerine taşınmaz.
+    if (job.direction === 'up' && sourceChanged(job)) throw new Error('kaynak değişti');
 
     if (job.direction === 'down') {
       fs.renameSync(job.localPath + PART, job.localPath);
@@ -247,6 +258,20 @@ function createQueue({ openSession, onChange, onUploaded }) {
       job.speed = 0;
       job.state = 'done';
     } catch (err) {
+      // Dosya yüklenirken yeniden kaydedilmiş (editörde düzenlerken olağan): bu bir bağlantı hatası değildir.
+      // Aynı hedefe sırada daha yeni bir yükleme varsa bu iş gereksizdir; yoksa son haliyle bir kez baştan yüklenir.
+      if (job.direction === 'up' && !job.cancelRequested && job.started && sourceChanged(job)) {
+        await cleanupPart(job);
+        job.speed = 0;
+        if (jobs.some((o) => o !== job && o.state === 'queued' && o.direction === 'up' && o.remotePath === job.remotePath)) {
+          jobs.splice(jobs.indexOf(job), 1);
+        } else if (!job.restarted) {
+          Object.assign(job, { restarted: true, state: 'queued', bytes: 0 });
+        } else {
+          Object.assign(job, { state: 'error', error: 'Dosya yüklenirken değişti. Yeniden dene.' });
+        }
+        return;
+      }
       // Giriş yapılamıyorsa temizlik için yeniden bağlanmak yalnızca yeni bir başarısız giriş demektir.
       const noRetry = err && NO_RETRY.includes(err.code);
       // Bağlantı koptuysa geçici dosya kalır ki "Yeniden dene" kaldığı yerden sürsün; iptalde silinir.
@@ -339,7 +364,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
     retry(id) {
       const job = jobs.find((j) => j.id === id);
       if (!job || !['error', 'cancelled'].includes(job.state)) return;
-      Object.assign(job, { state: 'queued', bytes: 0, error: null, cancelRequested: false });
+      Object.assign(job, { state: 'queued', bytes: 0, error: null, cancelRequested: false, restarted: false });
       emitNow();
       pump();
     },
