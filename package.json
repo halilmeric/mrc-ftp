@@ -1,0 +1,20 @@
+{
+  "name": "mrc-ftp",
+  "version": "0.1.0",
+  "description": "cPanel hostingleri için sade FTP/FTPS istemcisi",
+  "main": "src/main/main.js",
+  "license": "MIT",
+  "author": "MRCHA",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "basic-ftp": "6.2.6"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0",
+    "ftp-srv": "4.6.3"
+  }
+}
