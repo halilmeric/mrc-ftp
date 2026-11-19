@@ -7,16 +7,88 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<aside id="sites"></aside>
+<aside id="sites">
+  <div class="lbl">Siteler</div>
+  <div id="site-list"></div>
+  <button id="add-site" class="site add" type="button">+ Yeni site</button>
+</aside>
+
 <main>
-  <div id="topbar"></div>
-  <div id="panes">
-    <section id="local" class="pane"></section>
-    <section id="remote" class="pane"></section>
+  <div id="topbar">
+    <b id="site-name">Bağlı değil</b>
+    <span id="badge" class="badge" hidden></span>
+    <span class="grow"></span>
+    <button id="btn-mkdir" class="tb" type="button" hidden>Yeni klasör</button>
+    <button id="btn-refresh" class="tb" type="button">Yenile</button>
   </div>
-  <footer id="status"></footer>
+  <div id="notice" role="alert" hidden></div>
+  <div id="panes">
+    <section id="local" class="pane" aria-label="Mac"></section>
+    <section id="remote" class="pane" aria-label="Sunucu"></section>
+  </div>
+  <footer id="status">
+    <span id="st-local"></span>
+    <span id="st-remote"></span>
+    <span class="grow"></span>
+    <span>Sürükleyip bırak ya da çift tıkla</span>
+  </footer>
 </main>
-<aside id="tray" hidden></aside>
+
+<aside id="tray" aria-label="Aktarımlar" hidden></aside>
+
+<dialog id="dlg-site">
+  <form id="site-form" novalidate>
+    <h2 id="site-form-title">Yeni site</h2>
+    <label>Ad<input id="f-name" placeholder="Örnek site" autocomplete="off"></label>
+    <label>Sunucu<input id="f-host" placeholder="ftp.ornek.com" autocomplete="off" spellcheck="false"><small class="err" hidden>Bu alan gerekli.</small></label>
+    <label>Kullanıcı adı<input id="f-user" placeholder="kullanici@ornek.com" autocomplete="off" spellcheck="false"><small class="err" hidden>Bu alan gerekli.</small></label>
+    <label>Şifre<input id="f-pass" type="password" autocomplete="off"><small class="err" hidden>Bu alan gerekli.</small></label>
+    <div class="row2">
+      <label>Port<input id="f-port" inputmode="numeric" value="21"></label>
+      <label>Başlangıç klasörü<input id="f-dir" placeholder="/public_html" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <label>Şifreleme
+      <select id="f-secure">
+        <option value="1">FTPS (önerilen)</option>
+        <option value="0">Düz FTP (şifresiz)</option>
+      </select>
+    </label>
+    <p id="f-plain-warn" class="warnline" hidden>Şifren ve dosyaların ağda açık gider.</p>
+    <div class="acts">
+      <button id="f-cancel" type="button">Vazgeç</button>
+      <button class="p" type="submit">Kaydet ve bağlan</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-cert">
+  <h2>Bu sunucunun kimliği doğrulanamadı</h2>
+  <p id="cert-reason"></p>
+  <p class="muted">Parmak izi</p>
+  <code id="cert-fp"></code>
+  <p class="muted">Paylaşımlı hostinglerde ilk iki durum yaygındır.</p>
+  <div class="acts">
+    <button id="cert-cancel" type="button">Vazgeç</button>
+    <button id="cert-trust" class="p" type="button">Bu siteye güven ve bağlan</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-pass">
+  <form id="pass-form">
+    <h2 id="pass-title"></h2>
+    <label>Şifre<input id="p-pass" type="password" autocomplete="off"></label>
+    <div class="acts">
+      <button id="p-cancel" type="button">Vazgeç</button>
+      <button class="p" type="submit">Bağlan</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="format.js"></script>
+<script src="ui.js"></script>
+<script src="sites.js"></script>
+<script src="pane.js"></script>
+<script src="tray.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
