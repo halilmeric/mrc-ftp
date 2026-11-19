@@ -70,3 +70,10 @@ test('remove siler; bozuk dosya boş liste verir', () => {
   fs.writeFileSync(file, '{bozuk');
   assert.deepStrictEqual(createSiteStore({ file, encrypt: enc, decrypt: dec }).list(), []);
 });
+
+test('şifre çözülemezse site şifresiz sayılır', () => {
+  const file = tmpFile();
+  const { id } = createSiteStore({ file, encrypt: enc, decrypt: dec }).save(input);
+  const broken = createSiteStore({ file, encrypt: enc, decrypt: () => { throw new Error('anahtar yok'); } });
+  assert.strictEqual(broken.get(id).password, null);
+});

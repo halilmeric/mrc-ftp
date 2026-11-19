@@ -7,7 +7,8 @@
   "author": "MRCHA",
   "scripts": {
     "start": "electron .",
-    "test": "node --test --test-concurrency=1 \"test/*.test.js\""
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
+    "dist": "electron-builder --mac"
   },
   "dependencies": {
     "basic-ftp": "6.2.6"
@@ -16,5 +17,25 @@
     "electron": "45.4.1",
     "electron-builder": "26.18.0",
     "ftp-srv": "4.6.3"
+  },
+  "build": {
+    "appId": "com.mrcha.mrcftp",
+    "productName": "MRC FTP",
+    "files": [
+      "src/**",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "identity": "-",
+      "category": "public.app-category.developer-tools"
+    }
   }
 }

@@ -23,7 +23,14 @@ function createSiteStore({ file, encrypt, decrypt }) {
     get(id) {
       const row = read().find((r) => r.id === id);
       if (!row) return null;
-      return { ...pub(row), password: row.secret ? decrypt(row.secret) : null };
+      // Keychain anahtarı değişmişse (ör. yedekten dönüş) şifre çözülemez; site şifresiz sayılır ve şifre sorulur.
+      let password = null;
+      try {
+        if (row.secret) password = decrypt(row.secret);
+      } catch {
+        password = null;
+      }
+      return { ...pub(row), password };
     },
     save(input) {
       const rows = read();
