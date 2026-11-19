@@ -28,6 +28,14 @@ class SlowFs extends FileSystem {
     slow.pipe(real.stream);
     return { stream: slow, clientPath: real.clientPath };
   }
+  async read(name, opts) {
+    const real = await super.read(name, opts);
+    const delay = this.delay;
+    const slow = new Transform({ transform(chunk, enc, cb) { setTimeout(() => cb(null, chunk), delay); } });
+    real.stream.on('error', (err) => slow.destroy(err));
+    real.stream.pipe(slow);
+    return { stream: slow, clientPath: real.clientPath };
+  }
 }
 
 let certCache;

@@ -138,7 +138,6 @@ test('yarıda kopan üzerine yazma asıl dosyayı bozmaz; yeniden dene bitirir',
   await until(() => q.jobs()[0].state === 'error', 20000);
   assert.ok(q.jobs()[0].error);
   assert.strictEqual(fs.readFileSync(r('site.bin'), 'utf8'), 'eski');
-  noParts(s.root);
   const grew = seen.map((jobs) => jobs[0] && jobs[0].bytes).filter((b) => b > 0);
   assert.ok(grew.length >= 1);
   q.retry(q.jobs()[0].id);
@@ -243,3 +242,83 @@ test('kuyruk oturumu giriş yapamazsa tek deneme yapılır ve tüm işler hata o
   assert.strictEqual(q.jobs()[0].error, 'Kullanıcı adı ya da şifre yanlış.');
   q.close();
 });
+
+
+// --- Sürüm 2: aktarımı sürdürme ---
+const SIZE = 24 * 1024 * 1024;
+const pattern = (seed) => { const b = Buffer.alloc(SIZE); for (let i = 0; i < SIZE; i++) b[i] = (i * 7 + seed) % 251; return b; };
+const dropOnce = (onChange, s) => {
+  let done = false;
+  onChange((jobs) => { if (!done && jobs.some((j) => j.state === 'active' && j.bytes > 0)) { done = true; s.drop(); } });
+};
+const firstActiveBytesAfter = (seen, from) => {
+  const snap = seen.slice(from).find((jobs) => jobs[0] && jobs[0].state === 'active');
+  return snap ? snap[0].bytes : -1;
+};
+
+test('kopan yükleme kaldığı yerden sürer', () => setup({}, async ({ q, s, l, r, onChange, seen }) => {
+  const data = pattern(1);
+  fs.writeFileSync(l('b.bin'), data);
+  dropOnce(onChange, s);
+  await q.add({ direction: 'up', localPath: l('b.bin'), remotePath: '/b.bin', isDir: false });
+  await until(() => q.jobs()[0].state === 'error', 20000);
+  const part = fs.statSync(r('b.bin.mrcftp-part')).size;
+  assert.ok(part > 0 && part < SIZE, 'geçici dosya yarım kalmalı: ' + part);
+  const mark = seen.length;
+  q.retry(q.jobs()[0].id);
+  await until(() => q.jobs()[0].state === 'done', 30000);
+  assert.ok(firstActiveBytesAfter(seen, mark) > 0, 'ikinci deneme sıfırdan başlamamalı');
+  assert.ok(fs.readFileSync(r('b.bin')).equals(data));
+  noParts(s.root);
+}, { slow: 4 }));
+
+test('kopan indirme kaldığı yerden sürer', () => setup({}, async ({ q, s, l, r, local, onChange, seen }) => {
+  const data = pattern(2);
+  fs.writeFileSync(r('d.bin'), data);
+  dropOnce(onChange, s);
+  await q.add({ direction: 'down', localPath: l('d.bin'), remotePath: '/d.bin', isDir: false, size: SIZE, modified: null });
+  await until(() => q.jobs()[0].state === 'error', 20000);
+  const part = fs.statSync(l('d.bin.mrcftp-part')).size;
+  assert.ok(part > 0 && part < SIZE, 'geçici dosya yarım kalmalı: ' + part);
+  const mark = seen.length;
+  q.retry(q.jobs()[0].id);
+  await until(() => q.jobs()[0].state === 'done', 30000);
+  assert.ok(firstActiveBytesAfter(seen, mark) > 0, 'ikinci deneme sıfırdan başlamamalı');
+  assert.ok(fs.readFileSync(l('d.bin')).equals(data));
+  noParts(local);
+}, { slow: 4 }));
+
+test('kaynak değiştiyse sürdürmez, baştan aktarır', () => setup({}, async ({ q, s, l, r, onChange }) => {
+  fs.writeFileSync(l('c.bin'), pattern(3));
+  dropOnce(onChange, s);
+  await q.add({ direction: 'up', localPath: l('c.bin'), remotePath: '/c.bin', isDir: false });
+  await until(() => q.jobs()[0].state === 'error', 20000);
+  const fresh = pattern(4);
+  fs.writeFileSync(l('c.bin'), fresh);
+  fs.utimesSync(l('c.bin'), new Date(), new Date(Date.now() + 5000));
+  q.retry(q.jobs()[0].id);
+  await until(() => q.jobs()[0].state === 'done', 40000);
+  assert.ok(fs.readFileSync(r('c.bin')).equals(fresh));
+}, { slow: 2 }));
+
+test('geçici dosya beklenenden büyükse baştan aktarır', () => setup({}, async ({ q, s, l, r, onChange }) => {
+  const data = pattern(5);
+  fs.writeFileSync(l('e.bin'), data);
+  dropOnce(onChange, s);
+  await q.add({ direction: 'up', localPath: l('e.bin'), remotePath: '/e.bin', isDir: false });
+  await until(() => q.jobs()[0].state === 'error', 20000);
+  fs.writeFileSync(r('e.bin.mrcftp-part'), Buffer.alloc(SIZE + 100, 9));
+  q.retry(q.jobs()[0].id);
+  await until(() => q.jobs()[0].state === 'done', 40000);
+  assert.ok(fs.readFileSync(r('e.bin')).equals(data));
+}, { slow: 2 }));
+
+test('hata kartını kapatmak geçici dosyayı siler', () => setup({}, async ({ q, s, l, onChange }) => {
+  fs.writeFileSync(l('f.bin'), pattern(6));
+  dropOnce(onChange, s);
+  await q.add({ direction: 'up', localPath: l('f.bin'), remotePath: '/f.bin', isDir: false });
+  await until(() => q.jobs()[0].state === 'error', 20000);
+  q.dismiss(q.jobs()[0].id);
+  await until(() => fs.readdirSync(s.root).length === 0, 10000);
+  assert.deepStrictEqual(q.jobs(), []);
+}, { slow: 4 }));

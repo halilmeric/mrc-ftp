@@ -11,7 +11,7 @@
   }
   function download(entries, remoteDir, localDir) {
     for (const e of entries) {
-      mrc.transfers.add({ direction: 'down', localPath: joinPath(localDir, e.name), remotePath: joinPath(remoteDir, e.name), isDir: e.isDir, size: e.size });
+      mrc.transfers.add({ direction: 'down', localPath: joinPath(localDir, e.name), remotePath: joinPath(remoteDir, e.name), isDir: e.isDir, size: e.size, modified: e.modified });
     }
   }
   const guard = () => {

@@ -61,6 +61,7 @@ function registerIpc(win) {
     'transfers:retry': (id) => need().queue.retry(id),
     'transfers:answer': (id, choice, applyAll) => need().queue.answer(id, choice, applyAll),
     'transfers:clearFinished': () => need().queue.clearFinished(),
+    'transfers:dismiss': (id) => need().queue.dismiss(id),
   };
 
   for (const [channel, fn] of Object.entries(handlers)) {

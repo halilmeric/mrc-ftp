@@ -53,7 +53,9 @@ function createTray({ root, panes }) {
     }
     if (job.state === 'error') {
       return el('div', { class: 'job err' }, top('!'), el('small', {}, job.error || 'Aktarılamadı.'),
-        el('div', { class: 'acts' }, el('button', { type: 'button', onclick: () => mrc.transfers.retry(job.id) }, 'Yeniden dene')));
+        el('div', { class: 'acts' },
+          el('button', { type: 'button', onclick: () => mrc.transfers.retry(job.id) }, 'Yeniden dene'),
+          el('button', { type: 'button', onclick: () => mrc.transfers.dismiss(job.id) }, 'Kapat')));
     }
     if (job.state === 'queued') return el('div', { class: 'job' }, top(arrow, el('small', {}, job.total ? formatSize(job.total) : '')));
     const word = job.state === 'done' ? (job.direction === 'up' ? 'Yüklendi' : 'İndirildi') : job.state === 'skipped' ? 'Atlandı' : 'İptal edildi';

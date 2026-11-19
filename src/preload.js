@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('mrc', {
   local: { home: call('local:home'), list: call('local:list') },
   transfers: {
     add: call('transfers:add'), cancel: call('transfers:cancel'), retry: call('transfers:retry'),
-    answer: call('transfers:answer'), clearFinished: call('transfers:clearFinished'),
+    answer: call('transfers:answer'), clearFinished: call('transfers:clearFinished'), dismiss: call('transfers:dismiss'),
     onChange: (cb) => { ipcRenderer.on('transfers:change', (_event, jobs) => cb(jobs)); },
   },
   pathForFile: (file) => webUtils.getPathForFile(file),
