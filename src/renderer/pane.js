@@ -9,7 +9,7 @@ function progressBar(pct) {
 }
 
 // ponytail: her yenilemede tüm satırlar yeniden çizilir; on binlerce girdili klasörde yavaşlarsa sanal liste gerekir.
-function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLoaded }) {
+function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLoaded, onPreview }) {
   const state = { path: null, entries: [], sort: { key: 'name', dir: 1 }, selected: new Set(), anchor: null,
     renaming: null, confirming: null, creating: false, error: '', loading: false, ghost: null, stale: false };
   let ghostNode = null;
@@ -19,7 +19,7 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
   const crumb = el('div', { class: 'crumb' });
   const cols = el('div', { class: 'cols' });
   const errBox = el('div', { class: 'perr', hidden: true });
-  const rows = el('div', { class: 'rows' });
+  const rows = el('div', { class: 'rows', tabindex: '0', 'aria-label': label });
   root.append(crumb, cols, errBox, rows);
 
   const sorted = () => {
@@ -172,6 +172,30 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
     return go(state.path);
   };
   const settle = () => (state.stale ? refresh() : render());
+
+  // Klavye: oklar seçimi taşır, Enter açar ya da gönderir, boşluk Hızlı Bakış.
+  rows.addEventListener('keydown', (e) => {
+    if (editing() || state.path == null) return;
+    const all = sorted();
+    const index = all.findIndex((x) => state.selected.has(x.name));
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (all.length === 0) return;
+      const next = index < 0 ? 0 : Math.max(0, Math.min(all.length - 1, index + (e.key === 'ArrowDown' ? 1 : -1)));
+      state.selected = new Set([all[next].name]);
+      state.anchor = next;
+      render();
+      const row = rows.querySelector('.r.sel');
+      if (row) row.scrollIntoView({ block: 'nearest' });
+    } else if (index >= 0 && e.key === 'Enter') {
+      e.preventDefault();
+      if (all[index].isDir) go(joinPath(state.path, all[index].name));
+      else onSend(state.path, [all[index]]);
+    } else if (index >= 0 && e.key === ' ') {
+      e.preventDefault();
+      if (!all[index].isDir && onPreview) onPreview(state.path, all[index]);
+    }
+  });
 
   // Bırakma: karşı panelden ya da (yalnızca sunucu panelinde) Finder'dan.
   const accepts = (e) => state.path != null && (dragSource ? dragSource.from !== kind : (kind === 'remote' && e.dataTransfer.types.includes('Files')));

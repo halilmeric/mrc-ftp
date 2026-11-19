@@ -25,15 +25,20 @@
     onSend: (dir, entries) => guard() && upload(entries, dir, remote.path),
     onDropIn: (src, dir) => guard() && src.from === 'remote' && download(src.entries, src.dir, dir),
     onLoaded: (n) => { $('st-local').textContent = `Mac: ${n} öğe`; },
+    onPreview: (dir, entry) => mrc.preview.local(joinPath(dir, entry.name)),
   });
   const info = initInfo();
   const remote = createPane({
     root: $('remote'), kind: 'remote', label: 'Sunucu', list: mrc.remote.list, ops: mrc.remote,
-    menu: (entry) => [
+    menu: (entry, picked) => [
+      !entry.isDir && { label: 'Düzenle', run: () => mrc.edit.open(joinPath(remote.path, entry.name), { size: entry.size, modified: entry.modified }).catch((err) => notify(err.message)) },
+      { label: 'İndirilenler\'e indir', run: async () => download(picked, remote.path, (await mrc.local.downloads()).path) },
+      { label: 'Farklı indir…', run: async () => { const dir = await mrc.local.pickDir(); if (dir) download(picked, remote.path, dir.path); } },
       { label: 'Bilgi ve izinler…', run: () => info.open(remote.path, entry, () => remote.refresh()) },
       { label: 'Yeniden adlandır', run: () => remote.startRename(entry.name) },
       { label: 'Sil', danger: true, run: () => remote.startDelete(entry.name) },
-    ],
+    ].filter(Boolean),
+    onPreview: (dir, entry) => mrc.preview.remote(joinPath(dir, entry.name), entry.size).catch((err) => notify(err.message)),
     onSend: (dir, entries) => guard() && download(entries, dir, local.path),
     onDropIn: (src, dir) => guard() && src.from !== 'remote' && upload(src.entries, src.dir, dir),
     onLoaded: (n, path) => { $('st-remote').textContent = path == null ? '' : `Sunucu: ${n} öğe`; },
@@ -57,9 +62,16 @@
     $('site-name').textContent = 'Bağlı değil';
     $('badge').hidden = true;
     $('btn-mkdir').hidden = true;
+    $('st-edit').hidden = true;
     remote.reset();
     if (window.mrcTray) window.mrcTray.render([]);
   });
+
+  mrc.edit.onChange((count) => {
+    $('st-edit').hidden = count === 0;
+    $('st-edit-text').textContent = `${count} dosya düzenleniyor`;
+  });
+  $('st-edit-stop').addEventListener('click', () => mrc.edit.stopAll());
 
   $('btn-refresh').addEventListener('click', () => { local.refresh(); remote.refresh(); });
   $('btn-mkdir').addEventListener('click', () => remote.newFolder());

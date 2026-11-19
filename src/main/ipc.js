@@ -1,9 +1,13 @@
+const fs = require('node:fs');
 const path = require('node:path');
-const { app, ipcMain, safeStorage } = require('electron');
+const { app, dialog, ipcMain, safeStorage, shell } = require('electron');
 const { createSiteStore } = require('./sites');
 const { openSession, FtpError } = require('./ftp');
 const { createQueue } = require('./transfers');
 const localfs = require('./localfs');
+const { createEdits } = require('./edits');
+
+const MAX_PREVIEW = 50 * 1024 * 1024;
 
 // Arayüzün ana sürece açılan tek kapısı. Hatalar { code, message, cert } olarak taşınır; şifre hiçbir yanıtta yer almaz.
 function registerIpc(win) {
@@ -12,13 +16,19 @@ function registerIpc(win) {
     encrypt: (text) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text).toString('base64') : null),
     decrypt: (blob) => safeStorage.decryptString(Buffer.from(blob, 'base64')),
   });
-  let active = null; // { siteId, session, queue }
+  let active = null; // { siteId, session, queue, edits }
+  // Düzenleme ve önizleme kopyaları burada durur; bağlantı kesilince ve açılışta silinir.
+  const tmp = path.join(app.getPath('temp'), 'mrc-ftp');
+  fs.rmSync(tmp, { recursive: true, force: true });
+  const send = (channel, value) => { if (!win.isDestroyed()) win.webContents.send(channel, value); };
 
   const disconnect = () => {
     if (!active) return;
+    active.edits.stopAll();
     active.queue.close();
     active.session.close();
     active = null;
+    fs.rmSync(tmp, { recursive: true, force: true });
   };
   const need = () => {
     if (!active) throw new FtpError('NET', 'Önce bir siteye bağlan.');
@@ -40,11 +50,22 @@ function registerIpc(win) {
       const cfg = { host: site.host, port: site.port, user: site.user, password: pass, secure: site.secure, fingerprint: site.fingerprint };
       const session = await openSession(cfg);
       disconnect();
+      let edits = null;
       const queue = createQueue({
         openSession: () => openSession(cfg),
-        onChange: (jobs) => { if (!win.isDestroyed()) win.webContents.send('transfers:change', jobs); },
+        onChange: (jobs) => send('transfers:change', jobs),
+        onUploaded: (remotePath, baseline) => edits.updateBaseline(remotePath, baseline),
       });
-      active = { siteId, session, queue };
+      edits = createEdits({
+        dir: path.join(tmp, 'edit'),
+        getSession: async () => session,
+        enqueue: (spec) => queue.add(spec),
+        open: async (file) => {
+          if (await shell.openPath(file)) throw new FtpError('LOCAL', 'Bu dosyayı açacak bir uygulama bulunamadı.');
+        },
+        onChange: (count) => send('edits:change', count),
+      });
+      active = { siteId, session, queue, edits };
       return { startDir: site.startDir };
     },
     'trust': (siteId, fingerprint) => store.trust(siteId, fingerprint),
@@ -56,6 +77,23 @@ function registerIpc(win) {
     'remote:chmod': (p, mode) => need().session.chmod(p, Number(mode)),
     'local:home': () => localfs.home(),
     'local:list': (p) => localfs.list(p),
+    'local:downloads': () => ({ path: app.getPath('downloads') }),
+    'local:pickDir': async () => {
+      const res = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], buttonLabel: 'Buraya indir' });
+      return res.canceled ? null : { path: res.filePaths[0] };
+    },
+    'edit:open': (remotePath, entry) => need().edits.start(String(remotePath), { size: Number(entry.size), modified: entry.modified }),
+    'edit:stopAll': () => need().edits.stopAll(),
+    'preview:local': (file) => { win.previewFile(String(file)); },
+    'preview:remote': async (remotePath, size) => {
+      const name = path.posix.basename(String(remotePath));
+      if (String(remotePath).split('/').includes('..') || !name || /[\\/]/.test(name)) throw new FtpError('LOCAL', 'Bu dosya önizlenemiyor.');
+      if (Number(size) > MAX_PREVIEW) throw new FtpError('LOCAL', 'Önizlemek için çok büyük.');
+      const file = path.join(tmp, 'preview', name);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      await need().session.run((client) => client.downloadTo(file, String(remotePath)));
+      win.previewFile(file);
+    },
     'transfers:add': (job) => need().queue.add(job),
     'transfers:cancel': (id) => need().queue.cancel(id),
     'transfers:retry': (id) => need().queue.retry(id),

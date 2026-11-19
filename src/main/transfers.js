@@ -6,7 +6,7 @@ const FINISHED = ['done', 'skipped', 'cancelled'];
 const NO_RETRY = ['AUTH', 'CERT']; // yeniden denemek hesabı kilitleyebilir ya da anlamsızdır
 
 // Aktarım kuyruğu: aynı anda tek iş, kendi FTP oturumu. Soru bekleyen iş kuyruğu tutmaz.
-function createQueue({ openSession, onChange }) {
+function createQueue({ openSession, onChange, onUploaded }) {
   const jobs = [];
   const policy = { up: null, down: null }; // "hepsine uygula" seçimi
   const known = new Map(); // uzak klasör -> ad kümesi (çakışma kontrolü için)
@@ -18,8 +18,8 @@ function createQueue({ openSession, onChange }) {
   let timer = null;
   let lastEmit = 0;
 
-  const snapshot = () => jobs.map(({ id, direction, name, localPath, remotePath, state, bytes, total, speed, error }) =>
-    ({ id, direction, name, localPath, remotePath, state, bytes, total, speed, error }));
+  const snapshot = () => jobs.map(({ id, direction, name, localPath, remotePath, state, bytes, total, speed, error, note }) =>
+    ({ id, direction, name, localPath, remotePath, state, bytes, total, speed, error, note }));
 
   const emitNow = () => {
     clearTimeout(timer);
@@ -54,7 +54,7 @@ function createQueue({ openSession, onChange }) {
       name: path.basename(direction === 'up' ? localPath : remotePath),
       state: 'queued', bytes: 0, speed: 0, error: null, decision: null,
       cancelRequested: false, started: false, keepPart: false, samples: [],
-      resumable: false, sourceMark: null, offset: 0, remoteModified: modified,
+      resumable: false, sourceMark: null, offset: 0, remoteModified: modified, baseline: null, note: null,
     });
   };
 
@@ -206,12 +206,27 @@ function createQueue({ openSession, onChange }) {
       await moveIntoPlace(job);
       const names = known.get(path.posix.dirname(job.remotePath));
       if (names) names.add(job.name);
+      if (job.baseline && onUploaded) {
+        const now = await remoteEntry(job);
+        if (now) onUploaded(job.remotePath, { size: now.size, modified: now.modified });
+      }
     }
   }
 
+  const remoteEntry = async (job) => (await (await getSession()).list(path.posix.dirname(job.remotePath))).find((e) => e.name === job.name);
+
   async function runJob(job) {
     try {
-      if (job.decision !== 'overwrite' && await targetExists(job)) {
+      if (job.baseline) {
+        // Düzenlenen dosyanın geri yüklenmesi: sunucudaki dosya indirdiğimizle aynıysa sormadan yazılır,
+        // arada değiştiyse "hepsine uygula" seçimine bakılmadan sorulur.
+        const now = job.decision === 'overwrite' ? null : await remoteEntry(job);
+        if (now && (now.size !== job.baseline.size || now.modified !== job.baseline.modified)) {
+          job.note = 'Dosya sen düzenlerken sunucuda değişmiş';
+          job.state = 'asking';
+          return;
+        }
+      } else if (job.decision !== 'overwrite' && await targetExists(job)) {
         const choice = policy[job.direction];
         if (choice === 'skip') { job.state = 'skipped'; return; }
         if (choice !== 'overwrite') { job.state = 'asking'; return; }
@@ -280,12 +295,15 @@ function createQueue({ openSession, onChange }) {
   return {
     jobs: snapshot,
 
-    async add({ direction, localPath, remotePath, isDir, size, modified }) {
+    async add({ direction, localPath, remotePath, isDir, size, modified, baseline }) {
       if (closing) return;
       try {
-        if (!isDir) push(direction, localPath, remotePath, direction === 'up' ? fs.statSync(localPath).size : (size || 0), modified);
-        else if (direction === 'up') await expandUp(localPath, remotePath);
-        else await expandDown(remotePath, localPath);
+        if (isDir && direction === 'up') await expandUp(localPath, remotePath);
+        else if (isDir) await expandDown(remotePath, localPath);
+        else {
+          push(direction, localPath, remotePath, direction === 'up' ? fs.statSync(localPath).size : (size || 0), modified);
+          if (baseline) jobs[jobs.length - 1].baseline = baseline;
+        }
       } catch (err) {
         push(direction, localPath, remotePath, 0);
         const job = jobs[jobs.length - 1];
@@ -319,8 +337,9 @@ function createQueue({ openSession, onChange }) {
     answer(id, choice, applyAll) {
       const job = jobs.find((j) => j.id === id);
       if (!job || job.state !== 'asking') return;
-      const targets = applyAll ? jobs.filter((j) => j.state === 'asking' && j.direction === job.direction) : [job];
-      if (applyAll) policy[job.direction] = choice;
+      const all = applyAll && !job.baseline;
+      const targets = all ? jobs.filter((j) => j.state === 'asking' && j.direction === job.direction && !j.baseline) : [job];
+      if (all) policy[job.direction] = choice;
       for (const j of targets) {
         if (choice === 'overwrite') Object.assign(j, { decision: 'overwrite', state: 'queued' });
         else j.state = 'skipped';

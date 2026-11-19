@@ -45,11 +45,11 @@ function createTray({ root, panes }) {
       box.addEventListener('change', () => applyAll.set(job.id, box.checked));
       const answer = (choice) => mrc.transfers.answer(job.id, choice, box.checked);
       return el('div', { class: 'job ask' }, top('?'),
-        el('small', {}, `${job.direction === 'up' ? 'Sunucuda' : 'Mac\'te'} aynı adlı dosya var`),
+        el('small', {}, job.note || `${job.direction === 'up' ? 'Sunucuda' : 'Mac\'te'} aynı adlı dosya var`),
         el('div', { class: 'acts' },
           el('button', { type: 'button', class: 'p', onclick: () => answer('overwrite') }, 'Üzerine yaz'),
           el('button', { type: 'button', onclick: () => answer('skip') }, 'Atla')),
-        el('label', {}, box, 'Hepsine uygula'));
+        !job.note && el('label', {}, box, 'Hepsine uygula')); // düzenleme sorusu tek dosyaya özeldir
     }
     if (job.state === 'error') {
       return el('div', { class: 'job err' }, top('!'), el('small', {}, job.error || 'Aktarılamadı.'),
