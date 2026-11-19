@@ -11,7 +11,10 @@ function progressBar(pct) {
 // ponytail: her yenilemede tüm satırlar yeniden çizilir; on binlerce girdili klasörde yavaşlarsa sanal liste gerekir.
 function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }) {
   const state = { path: null, entries: [], sort: { key: 'name', dir: 1 }, selected: new Set(), anchor: null,
-    renaming: null, confirming: null, creating: false, error: '', loading: false, ghost: null };
+    renaming: null, confirming: null, creating: false, error: '', loading: false, ghost: null, stale: false };
+  let ghostNode = null;
+  const editing = () => Boolean(state.renaming || state.creating || state.confirming);
+  const taken = (name) => state.entries.some((e) => e.name === name);
 
   const crumb = el('div', { class: 'crumb' });
   const cols = el('div', { class: 'cols' });
@@ -64,13 +67,14 @@ function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }
         el('span', {}, `${entry.name} silinsin mi?${entry.isDir ? ' İçindekilerle birlikte silinir.' : ''}`),
         el('div', { class: 'acts' },
           el('button', { type: 'button', class: 'd', onclick: () => { state.confirming = null; act(() => ops.remove(joinPath(state.path, entry.name), entry.isDir)); } }, 'Sil'),
-          el('button', { type: 'button', onclick: () => { state.confirming = null; render(); } }, 'Vazgeç')));
+          el('button', { type: 'button', onclick: () => { state.confirming = null; settle(); } }, 'Vazgeç')));
     }
     if (state.renaming === entry.name) {
       return el('div', { class: 'r sel' }, el('div', { class: 'n' }, icon, nameInput(entry.name, (name) => {
         state.renaming = null;
-        if (name) act(() => ops.rename(joinPath(state.path, entry.name), joinPath(state.path, name)));
-        else render();
+        if (name && taken(name)) { state.error = 'Bu adda bir öğe zaten var.'; settle(); } // RNTO sunucuda sessizce üzerine yazar
+        else if (name) act(() => ops.rename(joinPath(state.path, entry.name), joinPath(state.path, name)));
+        else settle();
       })), el('span', { class: 'm' }), el('span', { class: 'm' }));
     }
     return el('div', {
@@ -139,14 +143,14 @@ function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }
     if (state.creating) {
       out.push(el('div', { class: 'r sel' }, el('div', { class: 'n' }, el('i', { class: 'ic' }), nameInput('', (name) => {
         state.creating = false;
-        if (name) act(() => ops.mkdir(joinPath(state.path, name)));
-        else render();
+        if (name && taken(name)) { state.error = 'Bu adda bir öğe zaten var.'; settle(); }
+        else if (name) act(() => ops.mkdir(joinPath(state.path, name)));
+        else settle();
       })), el('span', { class: 'm' }), el('span', { class: 'm' })));
     }
     all.forEach((entry, i) => out.push(rowFor(entry, i, all)));
-    if (state.ghost) {
-      out.push(el('div', { class: 'r ghost' }, el('div', { class: 'n' }, el('i', { class: 'ic f' }), el('span', {}, `${state.ghost.name} yükleniyor`)), progressBar(state.ghost.pct)));
-    }
+    ghostNode = state.ghost ? el('div', { class: 'r ghost' }, el('div', { class: 'n' }, el('i', { class: 'ic f' }), el('span', {}, `${state.ghost.name} yükleniyor`)), progressBar(state.ghost.pct)) : null;
+    if (ghostNode) out.push(ghostNode);
     if (out.length === 0) out.push(el('div', { class: 'empty' }, 'Bu klasör boş'));
     rows.replaceChildren(...out);
   }
@@ -156,7 +160,7 @@ function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }
     render();
     try {
       const entries = await list(path);
-      Object.assign(state, { path, entries, selected: new Set(), anchor: null, renaming: null, confirming: null, creating: false, error: '' });
+      Object.assign(state, { path, entries, selected: new Set(), anchor: null, renaming: null, confirming: null, creating: false, error: '', stale: false });
     } catch (err) {
       state.error = err.message || 'Klasör açılamadı.';
     }
@@ -164,7 +168,13 @@ function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }
     render();
     if (onLoaded) onLoaded(state.entries.length, state.path);
   }
-  const refresh = () => (state.path == null ? Promise.resolve() : go(state.path));
+  // Ad yazılırken ya da silme sorulurken gelen yenileme, düzenleme bitene kadar bekler.
+  const refresh = () => {
+    if (state.path == null) return Promise.resolve();
+    if (editing()) { state.stale = true; return Promise.resolve(); }
+    return go(state.path);
+  };
+  const settle = () => (state.stale ? refresh() : render());
 
   // Bırakma: karşı panelden ya da (yalnızca sunucu panelinde) Finder'dan.
   const accepts = (e) => state.path != null && (dragSource ? dragSource.from !== kind : (kind === 'remote' && e.dataTransfer.types.includes('Files')));
@@ -198,10 +208,12 @@ function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }
     get path() { return state.path; },
     get count() { return state.entries.length; },
     newFolder() { if (state.path != null && ops) { state.creating = true; render(); } },
+    // Yüklenen dosyanın soluk satırı: yüzde değişince yalnızca çubuk güncellenir, satırlar yeniden çizilmez.
     setGhost(ghost) {
-      const changed = JSON.stringify(ghost) !== JSON.stringify(state.ghost);
+      const same = ghost && state.ghost && ghost.name === state.ghost.name;
       state.ghost = ghost;
-      if (changed && !state.renaming && !state.creating) render();
+      if (same && ghostNode) { ghostNode.querySelector('.bar i').style.width = ghost.pct + '%'; return; }
+      if (!editing()) render();
     },
     reset() { Object.assign(state, { path: null, entries: [], selected: new Set(), error: '', ghost: null }); render(); if (onLoaded) onLoaded(0, null); },
   };

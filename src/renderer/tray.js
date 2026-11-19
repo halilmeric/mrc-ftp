@@ -6,9 +6,8 @@ function createTray({ root, panes }) {
   const dirname = (p) => p.slice(0, p.lastIndexOf('/')) || '/';
   const applyAll = new Map(); // iş kimliği -> "Hepsine uygula" işaretli mi
   let prev = new Map();
-  let sig = '';
+  const cache = new Map(); // "kimlik:durum:hata" -> kart düğümü
   let closeTimer = null;
-  let live = {};
   const timers = {};
   const refreshSoon = (which, target) => {
     const pane = panes[which];
@@ -36,8 +35,9 @@ function createTray({ root, panes }) {
     if (job.state === 'active') {
       const bar = progressBar(job.total ? (job.bytes / job.total) * 100 : 0);
       const text = el('small', {}, activeText(job));
-      live = { id: job.id, bar, text };
-      return el('div', { class: 'job' }, top(arrow, el('button', { type: 'button', class: 'mini', onclick: () => mrc.transfers.cancel(job.id) }, 'İptal')), bar, text);
+      const node = el('div', { class: 'job' }, top(arrow, el('button', { type: 'button', class: 'mini', onclick: () => mrc.transfers.cancel(job.id) }, 'İptal')), bar, text);
+      node.live = { bar, text };
+      return node;
     }
     if (job.state === 'asking') {
       const box = el('input', { type: 'checkbox', id: `all-${job.id}` });
@@ -87,20 +87,31 @@ function createTray({ root, panes }) {
     totalPct.textContent = pct + '%';
     totalEta.textContent = active && active.speed > 0 ? `yaklaşık ${formatEta((sum - got) / active.speed)}` : '';
 
-    const nextSig = jobs.map((j) => `${j.id}:${j.state}:${j.error || ''}`).join('|');
-    if (nextSig !== sig) {
-      sig = nextSig;
-      live = {};
-      const group = (states) => jobs.filter((j) => states.includes(j.state));
-      const out = [...group(['active']), ...group(['asking']), ...group(['error'])].map(card);
-      const queued = group(['queued']);
-      const finished = group(FINISHED);
-      if (queued.length) out.push(el('div', { class: 'sub' }, 'Sırada'), ...queued.map(card));
-      if (finished.length) out.push(el('div', { class: 'sub' }, 'Biten'), ...finished.map(card));
-      list.replaceChildren(...out);
-    } else if (active && live.id === active.id) {
-      live.bar.firstChild.style.width = (active.total ? (active.bytes / active.total) * 100 : 0) + '%';
-      live.text.textContent = activeText(active);
+    // Kartlar anahtarla yeniden kullanılır: değişmeyen kart yerinden oynamaz, üstündeki tıklama kaybolmaz.
+    const desired = [];
+    const keys = new Set();
+    const use = (key, make) => {
+      keys.add(key);
+      if (!cache.has(key)) cache.set(key, make());
+      desired.push(cache.get(key));
+    };
+    const keyOf = (j) => `${j.id}:${j.state}:${j.error || ''}`;
+    const group = (states) => jobs.filter((j) => states.includes(j.state));
+    for (const j of [...group(['active']), ...group(['asking']), ...group(['error'])]) use(keyOf(j), () => card(j));
+    const queued = group(['queued']);
+    const finished = group(FINISHED);
+    if (queued.length) use('sub:queued', () => el('div', { class: 'sub' }, 'Sırada'));
+    for (const j of queued) use(keyOf(j), () => card(j));
+    if (finished.length) use('sub:finished', () => el('div', { class: 'sub' }, 'Biten'));
+    for (const j of finished) use(keyOf(j), () => card(j));
+    for (const [key, node] of cache) {
+      if (!keys.has(key)) { node.remove(); cache.delete(key); }
+    }
+    desired.forEach((node, i) => { if (list.children[i] !== node) list.insertBefore(node, list.children[i] || null); });
+    if (active) {
+      const node = cache.get(keyOf(active));
+      node.live.bar.firstChild.style.width = (active.total ? (active.bytes / active.total) * 100 : 0) + '%';
+      node.live.text.textContent = activeText(active);
     }
 
     // Hepsi bittiyse 3 sn sonra panel kapanır; soru ya da hata varken açık kalır.

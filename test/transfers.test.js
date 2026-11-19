@@ -156,3 +156,90 @@ test('ilerleme artan baytlarla birden çok kez bildirilir', () => setup({}, asyn
   assert.deepStrictEqual(bytes, [...bytes].sort((a, b) => a - b));
   assert.ok(q.jobs()[0].speed >= 0);
 }, { slow: 4 }));
+
+// --- Son inceleme bulguları ---
+const { FtpError } = require('../src/main/ftp');
+
+// Gerçek oturumu sarar; rename davranışını ve açılan oturumları testten yönetmeye yarar.
+async function wrapped(files, { rename, slow } = {}, fn) {
+  const s = await startServer({ files, slow });
+  const sessions = [];
+  const seen = [];
+  const q = createQueue({
+    openSession: async () => {
+      const real = await openSession({ host: '127.0.0.1', port: s.port, user: s.user, password: s.password, secure: false });
+      sessions.push(real);
+      if (!rename) return real;
+      return new Proxy(real, { get: (t, k) => (k === 'rename' ? (from, to) => rename(t, from, to, s) : t[k]) });
+    },
+    onChange: (jobs) => seen.push(jobs),
+  });
+  const local = tmp();
+  try {
+    await fn({ s, q, sessions, seen, l: (p) => path.join(local, p), r: (p) => path.join(s.root, p) });
+  } finally {
+    q.close();
+    await s.stop();
+  }
+}
+
+test('taşıma yanıtı kaybolursa tamamlanan dosya silinmez', () => wrapped({ 'a.txt': 'eski' }, {
+  // Sunucu taşımayı yapar ama yanıt ulaşmaz; yinelenen deneme "kaynak yok" hatası alır.
+  rename: async (real, from, to) => { await real.rename(from, to); throw new FtpError('FTP', 'Sunucu işlemi reddetti: RNFR'); },
+}, async ({ q, l, r }) => {
+  fs.writeFileSync(l('a.txt'), 'yeni içerik');
+  await q.add({ direction: 'up', localPath: l('a.txt'), remotePath: '/a.txt', isDir: false });
+  await until(() => q.jobs()[0].state === 'asking');
+  q.answer(q.jobs()[0].id, 'overwrite', false);
+  await until(() => !['queued', 'active'].includes(q.jobs()[0].state));
+  assert.strictEqual(q.jobs()[0].state, 'done');
+  assert.strictEqual(fs.readFileSync(r('a.txt'), 'utf8'), 'yeni içerik');
+}));
+
+test('geçici dosya kaybolduysa asıl dosya silinmez', () => wrapped({ 'a.txt': 'eski' }, {
+  rename: async (real, from, to, s) => { fs.rmSync(path.join(s.root, from)); throw new FtpError('FTP', 'Sunucu işlemi reddetti: RNFR'); },
+}, async ({ q, l, r }) => {
+  fs.writeFileSync(l('a.txt'), 'yeni içerik');
+  await q.add({ direction: 'up', localPath: l('a.txt'), remotePath: '/a.txt', isDir: false });
+  await until(() => q.jobs()[0].state === 'asking');
+  q.answer(q.jobs()[0].id, 'overwrite', false);
+  await until(() => !['queued', 'active'].includes(q.jobs()[0].state));
+  assert.strictEqual(q.jobs()[0].state, 'error');
+  assert.strictEqual(fs.readFileSync(r('a.txt'), 'utf8'), 'eski');
+}));
+
+test('aynı anda eklenen klasörler tek oturum açar', () => wrapped({}, {}, async ({ q, sessions, l }) => {
+  for (const n of ['k1', 'k2', 'k3']) { fs.mkdirSync(l(n)); fs.writeFileSync(l(n + '/f.txt'), n); }
+  await Promise.all(['k1', 'k2', 'k3'].map((n) => q.add({ direction: 'up', localPath: l(n), remotePath: '/' + n, isDir: true })));
+  await until(() => q.jobs().length === 3 && q.jobs().every((j) => j.state === 'done'));
+  assert.strictEqual(sessions.length, 1);
+}));
+
+test('aktarım sürerken kapatma: geçici dosya temizlenir, oturum kapanır, bildirim kesilir', () => wrapped({}, { slow: 4 }, async ({ q, s, sessions, seen, l }) => {
+  fs.writeFileSync(l('buyuk.bin'), Buffer.alloc(24 * 1024 * 1024, 5));
+  await q.add({ direction: 'up', localPath: l('buyuk.bin'), remotePath: '/buyuk.bin', isDir: false });
+  await until(() => q.jobs()[0] && q.jobs()[0].state === 'active' && q.jobs()[0].bytes > 0, 20000);
+  q.close();
+  const count = seen.length;
+  await until(() => sessions.every((x) => x.client.closed), 20000);
+  await new Promise((res) => setTimeout(res, 300));
+  assert.deepStrictEqual(fs.readdirSync(s.root), []);
+  assert.strictEqual(seen.length, count);
+}));
+
+test('kuyruk oturumu giriş yapamazsa tek deneme yapılır ve tüm işler hata olur', async () => {
+  let calls = 0;
+  const q = createQueue({
+    openSession: async () => { calls += 1; throw new FtpError('AUTH', 'Kullanıcı adı ya da şifre yanlış.'); },
+    onChange: () => {},
+  });
+  const local = tmp();
+  for (const n of ['1.txt', '2.txt', '3.txt']) {
+    fs.writeFileSync(path.join(local, n), 'x');
+    q.add({ direction: 'up', localPath: path.join(local, n), remotePath: '/' + n, isDir: false });
+  }
+  await until(() => q.jobs().length === 3 && q.jobs().every((j) => j.state === 'error'));
+  assert.strictEqual(calls, 1);
+  assert.strictEqual(q.jobs()[0].error, 'Kullanıcı adı ya da şifre yanlış.');
+  q.close();
+});

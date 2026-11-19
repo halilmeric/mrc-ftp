@@ -36,6 +36,7 @@
   document.addEventListener('mrc:connected', async (e) => {
     const { site, startDir } = e.detail;
     connected = true;
+    window.mrcTray.render([]); // önceki sitenin kartları yeni sitenin kuyruğuna karışmasın
     $('site-name').textContent = site.name;
     $('badge').hidden = false;
     $('badge').textContent = site.secure ? 'Şifreli bağlantı' : 'Şifresiz';

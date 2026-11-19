@@ -26,7 +26,7 @@ function initSites() {
       const cls = 'site' + (site.id === activeId ? ' on' : '') + (site.id === busyId ? ' busy' : '');
       return el('button', {
         type: 'button', class: cls, title: `${site.user}@${site.host}`,
-        onclick: () => connect(site),
+        onclick: () => { if (site.id !== activeId) connect(site); }, // etkin siteye tıklamak süren aktarımları düşürmesin
         oncontextmenu: (e) => {
           e.preventDefault();
           showMenu(e.clientX, e.clientY, [
@@ -86,6 +86,7 @@ function initSites() {
   function askTrust(site, cert, password) {
     pendingTrust = { site, cert, password };
     $('cert-reason').textContent = (CERT_TEXT[cert.reason] || CERT_TEXT.untrusted)(cert);
+    $('cert-who').textContent = `Sertifika sahibi: ${cert.subject || 'bilinmiyor'} · Veren: ${cert.issuer || 'bilinmiyor'}`;
     $('cert-fp').textContent = cert.fingerprint;
     $('dlg-cert').showModal();
   }

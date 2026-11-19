@@ -3,6 +3,7 @@ const path = require('node:path');
 
 const PART = '.mrcftp-part';
 const FINISHED = ['done', 'skipped', 'cancelled'];
+const NO_RETRY = ['AUTH', 'CERT']; // yeniden denemek hesabı kilitleyebilir ya da anlamsızdır
 
 // Aktarım kuyruğu: aynı anda tek iş, kendi FTP oturumu. Soru bekleyen iş kuyruğu tutmaz.
 function createQueue({ openSession, onChange }) {
@@ -10,7 +11,9 @@ function createQueue({ openSession, onChange }) {
   const policy = { up: null, down: null }; // "hepsine uygula" seçimi
   const known = new Map(); // uzak klasör -> ad kümesi (çakışma kontrolü için)
   let session = null;
+  let sessionPromise = null;
   let pumping = false;
+  let closing = false;
   let nextId = 1;
   let timer = null;
   let lastEmit = 0;
@@ -21,6 +24,7 @@ function createQueue({ openSession, onChange }) {
   const emitNow = () => {
     clearTimeout(timer);
     timer = null;
+    if (closing) return;
     lastEmit = Date.now();
     onChange(snapshot());
   };
@@ -31,16 +35,16 @@ function createQueue({ openSession, onChange }) {
     else if (!timer) timer = setTimeout(emitNow, wait);
   };
 
-  const getSession = async () => {
-    if (!session) session = await openSession();
-    return session;
+  // Eşzamanlı çağrılar tek oturumu paylaşır; açılamazsa bir sonraki çağrı yeniden dener.
+  const getSession = () => {
+    if (!sessionPromise) {
+      sessionPromise = openSession().then((ses) => { session = ses; return ses; }, (err) => { sessionPromise = null; throw err; });
+    }
+    return sessionPromise;
   };
 
   const remoteNames = async (dir) => {
-    if (!known.has(dir)) {
-      const ses = await getSession();
-      known.set(dir, new Set((await ses.list(dir)).map((e) => e.name)));
-    }
+    if (!known.has(dir)) known.set(dir, new Set((await (await getSession()).list(dir)).map((e) => e.name)));
     return known.get(dir);
   };
 
@@ -48,8 +52,15 @@ function createQueue({ openSession, onChange }) {
     jobs.push({
       id: nextId++, direction, localPath, remotePath, total,
       name: path.basename(direction === 'up' ? localPath : remotePath),
-      state: 'queued', bytes: 0, speed: 0, error: null, decision: null, cancelRequested: false, samples: [],
+      state: 'queued', bytes: 0, speed: 0, error: null, decision: null,
+      cancelRequested: false, started: false, keepPart: false, samples: [],
     });
+  };
+
+  const describe = (err) => {
+    if (err && ['FTP', 'AUTH', 'CERT'].includes(err.code)) return err.message;
+    if (err && err.syscall) return 'Mac\'teki dosya okunamadı ya da yazılamadı.';
+    return 'Bağlantı koptu, dosya aktarılmadı.';
   };
 
   const mkdirRemote = async (dir) => {
@@ -98,8 +109,36 @@ function createQueue({ openSession, onChange }) {
     }
   };
 
+  // Geçici dosyayı asıl adına taşır. Taşıma reddedilirse asıl dosyaya ancak geçici dosyanın
+  // hâlâ yerinde olduğu görüldükten sonra dokunulur; aksi halde tamamlanmış ya da tek kalan kopya silinebilir.
+  async function moveIntoPlace(job) {
+    const ses = await getSession();
+    const part = job.remotePath + PART;
+    try {
+      await ses.rename(part, job.remotePath);
+      return;
+    } catch (err) {
+      if (err.code !== 'FTP') throw err;
+      const entries = await (await getSession()).list(path.posix.dirname(job.remotePath));
+      const names = new Set(entries.map((e) => e.name));
+      if (!names.has(job.name + PART)) {
+        // Geçici dosya yok. Hedef yüklenen dosyanın boyutundaysa taşıma olmuş, yalnızca yanıt kaybolmuştur;
+        // değilse geçici dosya sunucuda kaybolmuştur ve eski dosyaya dokunulmaz.
+        const target = entries.find((e) => e.name === job.name);
+        if (target && target.size === job.total) return;
+        throw err;
+      }
+      // Bazı sunucular var olan dosyanın üzerine taşımaz: önce eskiyi kaldır.
+      job.keepPart = true; // bundan sonra geçici dosya yüklenen tek kopya olabilir
+      if (names.has(job.name)) await ses.remove(job.remotePath, false);
+      await ses.rename(part, job.remotePath);
+      job.keepPart = false;
+    }
+  }
+
   async function transfer(job) {
     const ses = await getSession();
+    job.started = true;
     // run() kopan bağlantıda işlemi kendiliğinden yineler; aktarımda bunu istemiyoruz, hatayı değer olarak döndürürüz.
     const failure = await ses.run(async (client) => {
       client.trackProgress((info) => {
@@ -122,18 +161,12 @@ function createQueue({ openSession, onChange }) {
       }
     });
     if (failure) throw failure;
+    if (job.cancelRequested) throw new Error('iptal');
 
     if (job.direction === 'down') {
       fs.renameSync(job.localPath + PART, job.localPath);
     } else {
-      try {
-        await ses.rename(job.remotePath + PART, job.remotePath);
-      } catch (err) {
-        if (err.code !== 'FTP') throw err;
-        // Bazı sunucular var olan dosyanın üzerine taşımaz: önce eskiyi kaldır.
-        await ses.remove(job.remotePath, false);
-        await ses.rename(job.remotePath + PART, job.remotePath);
-      }
+      await moveIntoPlace(job);
       const names = known.get(path.posix.dirname(job.remotePath));
       if (names) names.add(job.name);
     }
@@ -146,9 +179,7 @@ function createQueue({ openSession, onChange }) {
         if (choice === 'skip') { job.state = 'skipped'; return; }
         if (choice !== 'overwrite') { job.state = 'asking'; return; }
       }
-      job.state = 'active';
-      job.bytes = 0;
-      job.samples = [];
+      Object.assign(job, { state: 'active', bytes: 0, samples: [], started: false, keepPart: false });
       emitNow();
       await transfer(job);
       job.bytes = job.total || job.bytes;
@@ -156,15 +187,18 @@ function createQueue({ openSession, onChange }) {
       job.speed = 0;
       job.state = 'done';
     } catch (err) {
-      await cleanupPart(job);
+      // Giriş yapılamıyorsa temizlik için yeniden bağlanmak yalnızca yeni bir başarısız giriş demektir.
+      const noRetry = err && NO_RETRY.includes(err.code);
+      if (job.started && !job.keepPart && !noRetry) await cleanupPart(job);
       job.speed = 0;
       if (job.cancelRequested) {
         job.state = 'cancelled';
       } else {
         job.state = 'error';
-        job.error = err && err.code === 'FTP' ? err.message
-          : err && err.code === 'AUTH' ? err.message
-            : 'Bağlantı koptu, dosya aktarılmadı.';
+        job.error = job.keepPart ? `Dosya yüklendi ama yerine taşınamadı; sunucuda ${job.name}${PART} adıyla duruyor.` : describe(err);
+        if (noRetry) {
+          for (const other of jobs) if (other.state === 'queued') Object.assign(other, { state: 'error', error: job.error });
+        }
       }
     }
   }
@@ -173,7 +207,7 @@ function createQueue({ openSession, onChange }) {
     if (pumping) return;
     pumping = true;
     try {
-      for (;;) {
+      while (!closing) {
         const job = jobs.find((j) => j.state === 'queued');
         if (!job) break;
         await runJob(job);
@@ -181,6 +215,7 @@ function createQueue({ openSession, onChange }) {
       }
     } finally {
       pumping = false;
+      if (closing && session) session.close();
     }
     if (!jobs.some((j) => j.state === 'asking')) known.clear();
   }
@@ -189,6 +224,7 @@ function createQueue({ openSession, onChange }) {
     jobs: snapshot,
 
     async add({ direction, localPath, remotePath, isDir, size }) {
+      if (closing) return;
       try {
         if (!isDir) push(direction, localPath, remotePath, direction === 'up' ? fs.statSync(localPath).size : (size || 0));
         else if (direction === 'up') await expandUp(localPath, remotePath);
@@ -197,7 +233,7 @@ function createQueue({ openSession, onChange }) {
         push(direction, localPath, remotePath, 0);
         const job = jobs[jobs.length - 1];
         job.state = 'error';
-        job.error = (err && err.code && err.message) || 'Klasör okunamadı.';
+        job.error = err && err.syscall ? 'Klasör okunamadı.' : describe(err);
       }
       emitNow();
       pump();
@@ -242,13 +278,17 @@ function createQueue({ openSession, onChange }) {
       emitNow();
     },
 
+    // Bağlantı kesilirken: bildirimler durur, süren aktarım iptal edilir. Oturum, geçici dosya
+    // temizlendikten sonra pump() çıkarken kapanır; süren iş yoksa hemen.
     close() {
+      closing = true;
       clearTimeout(timer);
       for (const j of jobs) if (j.state === 'active') j.cancelRequested = true;
-      if (session) session.close();
-      session = null;
-      jobs.length = 0;
-      known.clear();
+      if (pumping) {
+        if (session) session.client.close();
+      } else if (sessionPromise) {
+        sessionPromise.then((ses) => ses.close(), () => {});
+      }
     },
   };
 }
