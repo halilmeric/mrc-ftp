@@ -58,6 +58,8 @@
   $('btn-mkdir').addEventListener('click', () => remote.newFolder());
 
   window.mrcPanes = { local, remote };
+  window.mrcTray = createTray({ root: $('tray'), panes: { local, remote } });
+  mrc.transfers.onChange((jobs) => window.mrcTray.render(jobs));
   mrc.local.home().then((h) => local.go(h.path));
   initSites();
 })();

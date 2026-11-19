@@ -7,7 +7,7 @@
   "author": "MRCHA",
   "scripts": {
     "start": "electron .",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\""
   },
   "dependencies": {
     "basic-ftp": "6.2.6"

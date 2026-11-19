@@ -111,10 +111,17 @@ async function dial({ host, port, user, password, secure, fingerprint }) {
   }
 }
 
-const toIso = (info) => {
-  const d = info.modifiedAt || (info.rawModifiedAt ? new Date(info.rawModifiedAt) : null);
-  return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
-};
+// LIST biçimi yakın tarihli dosyalarda yılı yazmaz ("Nov 19 12:34"); yıl eksikse bu yıl, o da gelecekteyse geçen yıl.
+function parseListDate(raw, now = new Date()) {
+  if (!/^[A-Za-z]{3}\s+\d{1,2}\s+(\d{1,2}:\d{2}|\d{4})$/.test(String(raw || '').trim())) return null;
+  const hasYear = /\b(19|20)\d\d\b/.test(raw);
+  const d = new Date(hasYear ? raw : `${raw} ${now.getFullYear()}`);
+  if (Number.isNaN(d.getTime())) return null;
+  if (!hasYear && d.getTime() - now.getTime() > 86400000) d.setFullYear(d.getFullYear() - 1);
+  return d.toISOString();
+}
+
+const toIso = (info) => (info.modifiedAt ? info.modifiedAt.toISOString() : parseListDate(info.rawModifiedAt));
 
 const sortEntries = (list) => list.sort((a, b) => (b.isDir - a.isDir) || a.name.localeCompare(b.name, 'tr'));
 
@@ -155,4 +162,4 @@ async function openSession(cfg) {
   };
 }
 
-module.exports = { openSession, FtpError, sanitizeEntries, pinDataSockets, sortEntries };
+module.exports = { openSession, FtpError, sanitizeEntries, pinDataSockets, sortEntries, parseListDate };

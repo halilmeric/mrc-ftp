@@ -97,3 +97,13 @@ test('veri bağlantısı da parmak izine bağlanır', async () => {
   sock.emit('secureConnect');
   assert.ok(sock.destroyed instanceof Error);
 });
+
+test('yılsız liste tarihi bu yıla, gelecekteyse geçen yıla yorulur', () => {
+  const { parseListDate } = require('../src/main/ftp');
+  const now = new Date(2026, 10, 19, 15, 0);
+  assert.strictEqual(new Date(parseListDate('Nov 19 12:34', now)).getFullYear(), 2026);
+  assert.strictEqual(new Date(parseListDate('Dec 25 10:00', now)).getFullYear(), 2025);
+  assert.strictEqual(new Date(parseListDate('Nov  3  2024', now)).getFullYear(), 2024);
+  assert.strictEqual(parseListDate('anlamsız', now), null);
+  assert.strictEqual(parseListDate('', now), null);
+});
