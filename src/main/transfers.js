@@ -92,6 +92,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
     for (const ent of await ses.list(remoteDir)) {
       const rp = path.posix.join(remoteDir, ent.name);
       const lp = path.join(localDir, ent.name);
+      if (ent.isDir && ent.link) continue; // klasöre giden bağ: döngüye ve çift indirmeye yol açar
       if (ent.isDir) await expandDown(rp, lp);
       else push('down', lp, rp, ent.size, ent.modified);
     }
