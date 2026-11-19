@@ -3,6 +3,10 @@ const path = require('node:path');
 const { FtpError } = require('./ftp');
 
 const MAX_EDIT = 10 * 1024 * 1024;
+// Açıldığında düzenlenmek yerine çalışan ya da başka bir yere yönlendiren türler. Dosya adı sunucudan gelir,
+// yani güvenilmezdir; ele geçirilmiş bir siteye konmuş böyle bir dosya "Düzenle" ile çalıştırılmamalı.
+const RUNS_ON_OPEN = new Set(['app', 'command', 'tool', 'terminal', 'inetloc', 'fileloc', 'webloc', 'url', 'jar', 'pkg', 'mpkg',
+  'dmg', 'workflow', 'action', 'scpt', 'scptd', 'osax', 'prefpane', 'service', 'kext', 'shortcut']);
 
 // Sunucudaki dosyayı Mac'teki editörde düzenleme: dosya geçici klasöre iner, açılır ve izlenir;
 // her kayıtta sunucuya geri yükleme kuyruğa eklenir.
@@ -35,6 +39,7 @@ function createEdits({ dir, getSession, enqueue, open, onChange, interval = 1000
     async start(remotePath, entry) {
       const name = path.posix.basename(remotePath);
       if (remotePath.split('/').includes('..') || !name || /[\\/]/.test(name)) throw new FtpError('LOCAL', 'Bu dosya düzenlemeye açılamıyor.');
+      if (RUNS_ON_OPEN.has(path.extname(name).slice(1).toLowerCase())) throw new FtpError('LOCAL', 'Bu dosya türü güvenlik nedeniyle düzenlemeye açılmıyor.');
       if (entry.size > MAX_EDIT) throw new FtpError('LOCAL', 'Düzenlemek için çok büyük, önce indir.');
       const existing = items.get(remotePath);
       if (existing) {
@@ -44,18 +49,26 @@ function createEdits({ dir, getSession, enqueue, open, onChange, interval = 1000
       const localPath = path.join(dir, String(++seq), name);
       fs.mkdirSync(path.dirname(localPath), { recursive: true });
       const session = await getSession();
+      // Panelin gösterdiği liste eskimiş olabilir: boyut sınırı ve karşılaştırma temeli güncel listeden alınır.
+      const fresh = (await session.list(path.posix.dirname(remotePath))).find((e) => e.name === name) || entry;
+      if (fresh.size > MAX_EDIT) throw new FtpError('LOCAL', 'Düzenlemek için çok büyük, önce indir.');
       await session.run((client) => client.downloadTo(localPath, remotePath));
-      const item = { localPath, remotePath, mark: markOf(localPath), baseline: { size: entry.size, modified: entry.modified } };
+      await open(localPath); // açılamazsa izlemeye alınmaz
+      const item = { localPath, remotePath, mark: markOf(localPath), baseline: { size: fresh.size, modified: fresh.modified } };
       item.timer = setInterval(() => check(item), interval);
       items.set(remotePath, item);
       onChange(items.size);
-      await open(localPath);
     },
 
     // Yükleme bitince kuyruk sunucudaki yeni boyut ve tarihi bildirir; sonraki kayıt buna göre karşılaştırılır.
     updateBaseline(remotePath, baseline) {
       const item = items.get(remotePath);
       if (item) item.baseline = baseline;
+    },
+
+    // Son anda yapılmış kayıtları, izlemeyi durdurmadan kuyruğa verir.
+    flush() {
+      for (const item of items.values()) check(item);
     },
 
     // İzlemeyi durdurur; son anda yapılmış bir kayıt varsa önce onu kuyruğa verir. Dosyalar wipe() ile silinir.

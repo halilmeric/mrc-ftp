@@ -25,7 +25,8 @@ Sağ tık › **"Düzenle"** (yalnızca dosyalarda).
 1. Dosya uygulamanın geçici klasörüne iner ve Mac'teki varsayılan uygulamayla açılır.
 2. Uygulama dosyayı izler. Her kaydedişte dosya sunucuya geri yüklenir; yükleme aktarım panelinde görünür.
 3. Yüklemeden önce sunucudaki dosyaya bakılır. İndirdiğimizden beri değişmişse yükleme durur ve panelde sorar: **"Dosya sen düzenlerken sunucuda değişmiş"** › Üzerine yaz / Atla.
-4. Alt durum satırında "N dosya düzenleniyor · Bitir" görünür. "Bitir", bağlantıyı kesmek, site değiştirmek ya da uygulamayı kapatmak izlemeyi durdurur ve geçici kopyaları siler.
+4. Alt durum satırında "N dosya düzenleniyor · Bitir" görünür. "Bitir" izlemeyi durdurur; geçici kopyalar bağlantı kesilince, site değişince ya da uygulama kapanınca silinir. Bunlardan biri yapılırken sunucuya gitmemiş bir düzenleme varsa önce sıradaki yüklemeler beklenir, yine de kalan olursa uygulama sorar.
+5. Açıldığında çalışan dosya türleri (`.terminal`, `.webloc`, `.pkg`, `.command` vb.) düzenlemeye açılmaz.
 
 - Sınır: 10 MB üstü dosyalar düzenlemeye açılmaz ("Düzenlemek için çok büyük, önce indir").
 - Geri yükleme sürüm 1'deki güvenli yolu kullanır (geçici ada yaz, sonra taşı).

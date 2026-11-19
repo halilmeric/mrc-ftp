@@ -60,6 +60,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
 
   const describe = (err) => {
     if (err && ['FTP', 'AUTH', 'CERT'].includes(err.code)) return err.message;
+    if (err && typeof err.code === 'number') return 'Sunucu işlemi reddetti: ' + String(err.message).replace(/^\d+[ -]/, '');
     if (err && err.syscall && err.path) return 'Mac\'teki dosya okunamadı ya da yazılamadı.'; // soket hataları da syscall taşır, path taşımaz
     return 'Bağlantı koptu, dosya aktarılmadı.';
   };
@@ -208,7 +209,11 @@ function createQueue({ openSession, onChange, onUploaded }) {
       if (names) names.add(job.name);
       if (job.baseline && onUploaded) {
         const now = await remoteEntry(job);
-        if (now) onUploaded(job.remotePath, { size: now.size, modified: now.modified });
+        if (now) {
+          const base = { size: now.size, modified: now.modified };
+          for (const other of jobs) if (other.baseline && other.remotePath === job.remotePath) other.baseline = base;
+          onUploaded(job.remotePath, base);
+        }
       }
     }
   }
@@ -231,6 +236,11 @@ function createQueue({ openSession, onChange, onUploaded }) {
         if (choice === 'skip') { job.state = 'skipped'; return; }
         if (choice !== 'overwrite') { job.state = 'asking'; return; }
       }
+      // Geçici dosya hedefe göre adlandırılır: bu iş onu yeniden yazacağı için aynı hedefe giden
+      // başka bir yarım iş artık oradan süremez.
+      const sameTarget = (o) => o !== job && o.direction === job.direction && (job.direction === 'up' ? o.remotePath === job.remotePath : o.localPath === job.localPath);
+      for (const other of jobs) if (sameTarget(other)) other.resumable = false;
+      if (job.direction === 'up') job.total = fs.statSync(job.localPath).size; // kuyrukta beklerken dosya yeniden kaydedilmiş olabilir
       const offset = await resumeOffset(job);
       Object.assign(job, { state: 'active', bytes: offset, samples: [], started: false, keepPart: false });
       emitNow();
@@ -251,7 +261,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
       // Giriş yapılamıyorsa temizlik için yeniden bağlanmak yalnızca yeni bir başarısız giriş demektir.
       const noRetry = err && NO_RETRY.includes(err.code);
       // Bağlantı koptuysa geçici dosya kalır ki "Yeniden dene" kaldığı yerden sürsün; iptalde silinir.
-      const lostConnection = !job.cancelRequested && !noRetry && !(err && (err.code === 'FTP' || (err.syscall && err.path)));
+      const lostConnection = !job.cancelRequested && !noRetry && !(err && (err.code === 'FTP' || typeof err.code === 'number' || (err.syscall && err.path)));
       if (job.started && !job.keepPart && !noRetry) {
         if (lostConnection) job.resumable = true;
         else await cleanupPart(job);
@@ -268,6 +278,14 @@ function createQueue({ openSession, onChange, onUploaded }) {
       }
     }
   }
+
+  // Artık sürdürülmeyecek yarım işin geçici dosyasını siler.
+  const dropPart = (job) => {
+    if (!job.resumable) return;
+    job.resumable = false;
+    cleanupPart(job);
+  };
+  const unsentEdits = () => jobs.filter((j) => j.baseline && !FINISHED.includes(j.state));
 
   // Kapanırken: yarım kalan geçici dosyalar temizlenir, sonra oturum kapanır.
   async function finalize() {
@@ -301,6 +319,8 @@ function createQueue({ openSession, onChange, onUploaded }) {
         if (isDir && direction === 'up') await expandUp(localPath, remotePath);
         else if (isDir) await expandDown(remotePath, localPath);
         else {
+          // Aynı düzenlenen dosya için sırada bekleyen bir yükleme varsa yenisi gereksizdir: bekleyen iş dosyayı çalışırken okur.
+          if (baseline && jobs.some((j) => j.baseline && j.remotePath === remotePath && j.state === 'queued')) return;
           push(direction, localPath, remotePath, direction === 'up' ? fs.statSync(localPath).size : (size || 0), modified);
           if (baseline) jobs[jobs.length - 1].baseline = baseline;
         }
@@ -323,6 +343,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
         return;
       }
       job.state = 'cancelled';
+      dropPart(job);
       emitNow();
     },
 
@@ -342,10 +363,23 @@ function createQueue({ openSession, onChange, onUploaded }) {
       if (all) policy[job.direction] = choice;
       for (const j of targets) {
         if (choice === 'overwrite') Object.assign(j, { decision: 'overwrite', state: 'queued' });
-        else j.state = 'skipped';
+        else { j.state = 'skipped'; dropPart(j); }
       }
       emitNow();
       pump();
+    },
+
+    // Düzenlenip henüz sunucuya gitmemiş dosya sayısı.
+    pendingEdits: () => unsentEdits().length,
+
+    // Sırada ya da aktarımda olan düzenleme yüklemelerinin bitmesini bekler (soru ve hata bekleyenler beklenmez).
+    // Dönen sayı: hâlâ gitmemiş düzenleme sayısı.
+    async drainEdits(timeoutMs) {
+      const end = Date.now() + timeoutMs;
+      while (Date.now() < end && unsentEdits().some((j) => ['queued', 'active'].includes(j.state))) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return unsentEdits().length;
     },
 
     // Hata kartını kapatır: iş listeden çıkar, yarım geçici dosyası silinir.

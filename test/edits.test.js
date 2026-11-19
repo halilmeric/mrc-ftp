@@ -16,8 +16,8 @@ const until = async (fn, ms = 8000) => {
   }
 };
 
-async function setup(files, fn) {
-  const s = await startServer({ files });
+async function setup(files, fn, opts = {}) {
+  const s = await startServer({ files, ...opts });
   const connect = () => openSession({ host: '127.0.0.1', port: s.port, user: s.user, password: s.password, secure: false });
   const session = await connect();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mrc-edit-'));
@@ -25,7 +25,7 @@ async function setup(files, fn) {
   const counts = [];
   let edits;
   const q = createQueue({ openSession: connect, onChange: () => {}, onUploaded: (p, base) => edits.updateBaseline(p, base) });
-  edits = createEdits({ dir, getSession: async () => session, enqueue: (spec) => q.add(spec), open: async (p) => { opened.push(p); }, onChange: (n) => counts.push(n), interval: 25 });
+  edits = createEdits({ dir, getSession: async () => session, enqueue: (spec) => q.add(spec), open: async (p) => { if (opts.openFails) throw new Error('uygulama yok'); opened.push(p); }, onChange: (n) => counts.push(n), interval: 25 });
   const entry = async (name) => (await session.list('/')).find((e) => e.name === name);
   try {
     await fn({ s, q, edits, dir, opened, counts, entry, r: (p) => path.join(s.root, p) });
@@ -96,4 +96,49 @@ test('düzenle: bitirince izleme durur, silince klasör gider', () => setup({ 'a
   assert.strictEqual(fs.readFileSync(r('a.txt'), 'utf8'), 'eski');
   edits.wipe();
   assert.ok(!fs.existsSync(dir));
+}));
+
+
+// --- Sürüm 2 inceleme bulguları ---
+test('düzenle: art arda iki kayıt yanlış "sunucuda değişmiş" sorusu doğurmaz', () => setup({ 'a.txt': 'eski' }, async ({ q, edits, opened, entry, r }) => {
+  await edits.start('/a.txt', await entry('a.txt'));
+  fs.writeFileSync(opened[0], 'birinci kayıt');
+  await until(() => q.jobs().some((j) => j.state === 'active')); // ilk yükleme sürerken ikinci kayıt
+  fs.writeFileSync(opened[0], 'ikinci kayıt, daha uzun olan');
+  await until(() => q.jobs().length > 0 && q.jobs().every((j) => j.state === 'done') && fs.readFileSync(r('a.txt'), 'utf8') === 'ikinci kayıt, daha uzun olan', 15000);
+  assert.ok(!q.jobs().some((j) => j.state === 'asking'));
+}, { slow: 200 }));
+
+test('düzenle: yüklenmemiş düzenleme sayılır ve beklenebilir', () => setup({ 'a.txt': 'eski' }, async ({ q, edits, opened, entry, r }) => {
+  await edits.start('/a.txt', await entry('a.txt'));
+  assert.strictEqual(q.pendingEdits(), 0);
+  fs.writeFileSync(opened[0], 'gidecek olan kayıt');
+  await until(() => q.pendingEdits() === 1);
+  assert.strictEqual(await q.drainEdits(10000), 0);
+  assert.strictEqual(fs.readFileSync(r('a.txt'), 'utf8'), 'gidecek olan kayıt');
+  fs.writeFileSync(r('a.txt'), 'dışarıdan değişti, soru çıkacak');
+  fs.writeFileSync(opened[0], 'soruda bekleyen kayıt');
+  await until(() => q.jobs().some((j) => j.state === 'asking'));
+  assert.strictEqual(await q.drainEdits(300), 1);
+}, { slow: 20 }));
+
+test('düzenle: açılınca çalışan dosya türleri reddedilir', () => setup({ 'a.txt': 'eski' }, async ({ edits, opened }) => {
+  for (const name of ['x.terminal', 'x.WEBLOC', 'kur.pkg', 'a.command', 'b.inetloc', 'c.jar', 'd.app']) {
+    await assert.rejects(edits.start('/' + name, { size: 10, modified: null }), (e) => e.code === 'LOCAL' && /güvenlik/.test(e.message), name);
+  }
+  assert.strictEqual(opened.length, 0);
+}));
+
+test('düzenle: açılamayan dosya izlemeye alınmaz', () => setup({ 'a.txt': 'eski' }, async ({ edits, entry }) => {
+  await assert.rejects(edits.start('/a.txt', await entry('a.txt')));
+  assert.strictEqual(edits.count(), 0);
+}, { openFails: true }));
+
+test('düzenle: karşılaştırma temeli güncel listeden alınır', () => setup({ 'a.txt': 'eski' }, async ({ q, edits, opened, r }) => {
+  // Panel eski bir liste gösteriyor olabilir; indirdiğimiz anki durum esas alınmalı.
+  await edits.start('/a.txt', { size: 999, modified: '2001-01-01T00:00:00.000Z' });
+  fs.writeFileSync(opened[0], 'yeni içerik burada');
+  await until(() => q.jobs().length === 1 && q.jobs()[0].state !== 'queued' && q.jobs()[0].state !== 'active');
+  assert.strictEqual(q.jobs()[0].state, 'done');
+  assert.strictEqual(fs.readFileSync(r('a.txt'), 'utf8'), 'yeni içerik burada');
 }));

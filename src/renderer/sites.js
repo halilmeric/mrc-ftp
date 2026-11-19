@@ -45,7 +45,12 @@ function initSites() {
   }
 
   async function disconnect() {
-    await mrc.disconnect();
+    try {
+      await mrc.disconnect();
+    } catch (err) {
+      if (err.code !== 'CANCELLED') notify(err.message);
+      return;
+    }
     activeId = null;
     render();
     document.dispatchEvent(new CustomEvent('mrc:disconnected'));
@@ -53,8 +58,14 @@ function initSites() {
 
   async function remove(site) {
     const wasActive = site.id === activeId;
-    await mrc.sites.remove(site.id);
     confirmId = null;
+    try {
+      await mrc.sites.remove(site.id);
+    } catch (err) {
+      if (err.code !== 'CANCELLED') notify(err.message);
+      render();
+      return;
+    }
     if (wasActive) {
       activeId = null;
       document.dispatchEvent(new CustomEvent('mrc:disconnected'));
@@ -74,7 +85,7 @@ function initSites() {
     } catch (err) {
       if (err.code === 'CERT') askTrust(site, err.cert, password);
       else if (err.code === 'NEED_PASSWORD') askPassword(site);
-      else notify(err.message);
+      else if (err.code !== 'CANCELLED') notify(err.message); // kullanıcı "Vazgeç" dediyse sessiz kal
     } finally {
       busyId = null;
       render();

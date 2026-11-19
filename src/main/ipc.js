@@ -30,6 +30,27 @@ function registerIpc(win) {
     active = null;
     fs.rmSync(tmp, { recursive: true, force: true });
   };
+  // Düzenlenip sunucuya gitmemiş dosya varken bağlantı kesilirse geçici kopyalarla birlikte kaybolur:
+  // önce sıradaki yüklemeler beklenir, yine de kalan varsa kullanıcıya sorulur. true = devam edilebilir.
+  async function confirmLeave() {
+    if (!active) return true;
+    active.edits.flush();
+    const left = await active.queue.drainEdits(15000);
+    if (left === 0) return true;
+    const res = await dialog.showMessageBox(win, {
+      type: 'warning',
+      message: 'Yüklenmemiş düzenlemeler var',
+      detail: `${left} dosyadaki son değişiklik sunucuya gitmedi. Devam edersen bu değişiklikler kaybolur.`,
+      buttons: ['Vazgeç', 'Yine de devam et'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    return res.response === 1;
+  }
+  const leaveOrThrow = async () => {
+    if (!(await confirmLeave())) throw new FtpError('CANCELLED', '');
+  };
+
   const need = () => {
     if (!active) throw new FtpError('NET', 'Önce bir siteye bağlan.');
     return active;
@@ -38,11 +59,12 @@ function registerIpc(win) {
   const handlers = {
     'sites:list': () => store.list(),
     'sites:save': (input) => store.save(input),
-    'sites:remove': (id) => {
-      if (active && active.siteId === id) disconnect();
+    'sites:remove': async (id) => {
+      if (active && active.siteId === id) { await leaveOrThrow(); disconnect(); }
       store.remove(id);
     },
     'connect': async (siteId, password) => {
+      await leaveOrThrow();
       const site = store.get(siteId);
       if (!site) throw new FtpError('NET', 'Site bulunamadı.');
       const pass = password || site.password;
@@ -69,12 +91,15 @@ function registerIpc(win) {
       return { startDir: site.startDir };
     },
     'trust': (siteId, fingerprint) => store.trust(siteId, fingerprint),
-    'disconnect': () => disconnect(),
+    'disconnect': async () => { await leaveOrThrow(); disconnect(); },
     'remote:list': (p) => need().session.list(p),
     'remote:mkdir': (p) => need().session.mkdir(p),
     'remote:rename': (from, to) => need().session.rename(from, to),
     'remote:remove': (p, isDir) => need().session.remove(p, isDir),
-    'remote:chmod': (p, mode) => need().session.chmod(p, Number(mode)),
+    'remote:chmod': (p, mode) => {
+      if (!Number.isInteger(mode) || mode < 0 || mode > 0o777) throw new FtpError('LOCAL', 'Geçersiz izin.');
+      return need().session.chmod(p, mode);
+    },
     'local:home': () => localfs.home(),
     'local:list': (p) => localfs.list(p),
     'local:downloads': () => ({ path: app.getPath('downloads') }),
@@ -113,6 +138,17 @@ function registerIpc(win) {
       }
     });
   }
+  // Pencere kapanırken de aynı soru: yüklenmemiş düzenleme yoksa hemen kapanır.
+  let leaving = false;
+  win.on('close', (event) => {
+    if (leaving || !active) return;
+    event.preventDefault();
+    confirmLeave().then((ok) => {
+      if (!ok) return;
+      leaving = true;
+      win.close();
+    });
+  });
   win.on('closed', disconnect);
 }
 

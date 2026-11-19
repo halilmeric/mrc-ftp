@@ -57,6 +57,7 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
     } catch (err) {
       state.error = err.message || 'İşlem yapılamadı.';
     }
+    rows.focus();
     await refresh();
   }
 
@@ -171,11 +172,13 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
     if (editing()) { state.stale = true; return Promise.resolve(); }
     return go(state.path);
   };
-  const settle = () => (state.stale ? refresh() : render());
+  // Satır içi düzenleme bitince odak listeye döner ki ok tuşları çalışmaya devam etsin.
+  const settle = () => { rows.focus(); return state.stale ? refresh() : render(); };
 
   // Klavye: oklar seçimi taşır, Enter açar ya da gönderir, boşluk Hızlı Bakış.
   rows.addEventListener('keydown', (e) => {
     if (editing() || state.path == null) return;
+    if (e.repeat && (e.key === 'Enter' || e.key === ' ')) return; // basılı tutunca yinelenen aktarım ya da önizleme olmasın
     const all = sorted();
     const index = all.findIndex((x) => state.selected.has(x.name));
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

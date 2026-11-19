@@ -322,3 +322,34 @@ test('hata kartını kapatmak geçici dosyayı siler', () => setup({}, async ({ 
   await until(() => fs.readdirSync(s.root).length === 0, 10000);
   assert.deepStrictEqual(q.jobs(), []);
 }, { slow: 4 }));
+
+
+test('aynı hedefe giden iki yarım aktarım birbirinin geçici dosyasına eklemez', () => setup({}, async ({ q, s, l, r, onChange }) => {
+  const a = pattern(11);
+  fs.mkdirSync(l('x')); fs.mkdirSync(l('y'));
+  fs.writeFileSync(l('x/ayni.bin'), a);
+  fs.writeFileSync(l('y/ayni.bin'), pattern(12));
+  let drops = 0;
+  let armed = true;
+  onChange((jobs) => {
+    if (armed && drops < 2 && jobs.some((j) => j.state === 'active' && j.bytes > (drops === 0 ? 0 : 6 * 1024 * 1024))) { drops += 1; armed = false; s.drop(); setTimeout(() => { armed = true; }, 300); }
+  });
+  await q.add({ direction: 'up', localPath: l('x/ayni.bin'), remotePath: '/ayni.bin', isDir: false });
+  await until(() => q.jobs()[0].state === 'error', 20000);
+  await q.add({ direction: 'up', localPath: l('y/ayni.bin'), remotePath: '/ayni.bin', isDir: false });
+  await until(() => q.jobs()[1].state === 'error', 30000);
+  assert.strictEqual(drops, 2);
+  q.retry(q.jobs()[0].id); // ikinci iş hata kartında duruyor, geçici dosya onun baytlarını taşıyor
+  await until(() => q.jobs()[0].state === 'done', 40000);
+  assert.ok(fs.readFileSync(r('ayni.bin')).equals(a), 'hedef, birinci kaynağın bayt bayt aynısı olmalı');
+}, { slow: 3 }));
+
+test('atlanan ya da sırada iptal edilen yarım işin geçici dosyası silinir', () => setup({}, async ({ q, s, l, onChange }) => {
+  fs.writeFileSync(l('g.bin'), pattern(13));
+  dropOnce(onChange, s);
+  await q.add({ direction: 'up', localPath: l('g.bin'), remotePath: '/g.bin', isDir: false });
+  await until(() => q.jobs()[0].state === 'error', 20000);
+  assert.ok(fs.readdirSync(s.root).includes('g.bin.mrcftp-part'));
+  q.cancel(q.jobs()[0].id);
+  await until(() => fs.readdirSync(s.root).length === 0, 10000);
+}, { slow: 4 }));
