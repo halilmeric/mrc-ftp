@@ -101,7 +101,8 @@ function createTray({ root, panes }) {
     head.textContent = `${jobs.filter((j) => FINISHED.includes(j.state)).length} / ${jobs.length} bitti`;
     totalBar.firstChild.style.width = pct + '%';
     totalPct.textContent = pct + '%';
-    totalEta.textContent = active && active.speed > 0 ? `yaklaşık ${formatEta((sum - got) / active.speed)}` : '';
+    const speed = jobs.reduce((n, j) => n + (j.state === 'active' ? j.speed : 0), 0); // eşzamanlı aktarımların toplam hızı
+    totalEta.textContent = speed > 0 ? `yaklaşık ${formatEta((sum - got) / speed)}` : '';
 
     // Kartlar anahtarla yeniden kullanılır: değişmeyen kart yerinden oynamaz, üstündeki tıklama kaybolmaz.
     const desired = [];
@@ -124,10 +125,10 @@ function createTray({ root, panes }) {
       if (!keys.has(key)) { node.remove(); cache.delete(key); }
     }
     desired.forEach((node, i) => { if (list.children[i] !== node) list.insertBefore(node, list.children[i] || null); });
-    if (active) {
-      const node = cache.get(keyOf(active));
-      node.live.bar.firstChild.style.width = (active.total ? (active.bytes / active.total) * 100 : 0) + '%';
-      node.live.text.textContent = activeText(active);
+    for (const job of group(['active'])) {
+      const node = cache.get(keyOf(job));
+      node.live.bar.firstChild.style.width = (job.total ? (job.bytes / job.total) * 100 : 0) + '%';
+      node.live.text.textContent = activeText(job);
     }
 
     // Hepsi bittiyse 3 sn sonra panel kapanır; soru ya da hata varken açık kalır.
