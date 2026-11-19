@@ -5,14 +5,18 @@ const PART = '.mrcftp-part';
 const FINISHED = ['done', 'skipped', 'cancelled'];
 const NO_RETRY = ['AUTH', 'CERT']; // yeniden denemek hesabı kilitleyebilir ya da anlamsızdır
 
-// Aktarım kuyruğu: aynı anda tek iş, kendi oturumu (FTP ya da SFTP). Soru bekleyen iş kuyruğu tutmaz.
-function createQueue({ openSession, onChange, onUploaded }) {
+// Aktarım kuyruğu: aynı anda en çok `parallel` dosya, her biri kendi bağlantısında (FTP ya da SFTP).
+// Listeleme, taşıma ve silme gibi küçük işler ayrı bir denetim oturumundan gider. Soru bekleyen iş kuyruğu tutmaz.
+function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
   const jobs = [];
   const policy = { up: null, down: null }; // "hepsine uygula" seçimi
   const known = new Map(); // uzak klasör -> ad kümesi (çakışma kontrolü için)
   let session = null;
   let sessionPromise = null;
-  let pumping = false;
+  let running = 0; // çalışan kol sayısı
+  const slots = Array.from({ length: parallel }, () => ({ ses: null, busy: false, dead: false }));
+  // Aynı hedefe giden iki iş aynı geçici dosyayı yazar; aynı anda çalışmamalılar.
+  const targetOf = (j) => j.direction + ':' + (j.direction === 'up' ? j.remotePath : j.localPath);
   let closing = false;
   let nextId = 1;
   let timer = null;
@@ -184,7 +188,7 @@ function createQueue({ openSession, onChange, onUploaded }) {
   };
 
   async function transfer(job, offset) {
-    const ses = await getSession();
+    const { ses } = job.slot;
     job.started = true;
     const onProgress = (bytes) => {
       job.bytes = offset + bytes;
@@ -220,9 +224,10 @@ function createQueue({ openSession, onChange, onUploaded }) {
 
   const remoteEntry = async (job) => (await (await getSession()).list(path.posix.dirname(job.remotePath))).find((e) => e.name === job.name);
 
-  async function runJob(job) {
+  async function runJob(job, slot) {
     job.started = false;
     try {
+      await getSession(); // giriş hatası kollar ayrı ayrı denemeden, tek denemede anlaşılsın
       if (job.baseline) {
         // Düzenlenen dosyanın geri yüklenmesi: sunucudaki dosya indirdiğimizle aynıysa sormadan yazılır,
         // arada değiştiyse "hepsine uygula" seçimine bakılmadan sorulur.
@@ -243,6 +248,21 @@ function createQueue({ openSession, onChange, onUploaded }) {
       for (const other of jobs) if (sameTarget(other)) other.resumable = false;
       if (job.direction === 'up') job.total = fs.statSync(job.localPath).size; // kuyrukta beklerken dosya yeniden kaydedilmiş olabilir
       const offset = await resumeOffset(job);
+      if (!slot.ses) {
+        slot.opening = true;
+        try {
+          slot.ses = await openSession();
+        } catch (err) {
+          slot.opening = false;
+          // Sunucu fazladan bağlantıyı reddetti (bağlantı sınırı): bu kol kapanır, iş sırada kalır ve öbür kollar sürdürür.
+          if (NO_RETRY.includes(err && err.code) || !slots.some((o) => o.ses || o.opening)) throw err;
+          slot.dead = true;
+          return;
+        }
+        slot.opening = false;
+      }
+      if (job.cancelRequested) throw new Error('iptal');
+      job.slot = slot;
       Object.assign(job, { state: 'active', bytes: offset, samples: [], started: false, keepPart: false });
       emitNow();
       try {
@@ -307,24 +327,44 @@ function createQueue({ openSession, onChange, onUploaded }) {
   // Kapanırken: yarım kalan geçici dosyalar temizlenir, sonra oturum kapanır.
   async function finalize() {
     for (const job of jobs) if (job.resumable) await cleanupPart(job);
+    for (const slot of slots) if (slot.ses) slot.ses.close();
     if (session) session.close();
   }
 
-  async function pump() {
-    if (pumping) return;
-    pumping = true;
+  // Sıradaki uygun iş: başka bir kolun aldığı ya da aynı hedefe yazan bir iş sürerken bekleyen işler atlanır.
+  const nextJob = () => {
+    const busy = new Set(jobs.filter((j) => j.claimed).map(targetOf));
+    return jobs.find((j) => j.state === 'queued' && !j.claimed && !busy.has(targetOf(j)));
+  };
+
+  async function work(slot) {
+    slot.busy = true;
+    running += 1;
     try {
-      while (!closing) {
-        const job = jobs.find((j) => j.state === 'queued');
+      while (!closing && !slot.dead) {
+        const job = nextJob();
         if (!job) break;
-        await runJob(job);
+        job.claimed = true;
+        try {
+          await runJob(job, slot);
+        } finally {
+          job.claimed = false;
+          job.slot = null;
+        }
         emitNow();
       }
     } finally {
-      pumping = false;
-      if (closing) finalize();
+      slot.busy = false;
+      running -= 1;
     }
-    if (!jobs.some((j) => j.state === 'asking')) known.clear();
+    if (running > 0) return;
+    if (closing) { finalize(); return; }
+    if (jobs.some((j) => j.state === 'queued')) pump(); // kapanan kolun bıraktığı ya da hedefi boşalan iş
+    else if (!jobs.some((j) => j.state === 'asking')) known.clear();
+  }
+
+  function pump() {
+    for (const slot of slots) if (!slot.busy && !slot.dead && nextJob()) work(slot);
   }
 
   return {
@@ -354,9 +394,9 @@ function createQueue({ openSession, onChange, onUploaded }) {
     cancel(id) {
       const job = jobs.find((j) => j.id === id);
       if (!job || FINISHED.includes(job.state)) return;
-      if (job.state === 'active') {
-        job.cancelRequested = true;
-        if (session) session.abort(); // aktarım hata ile döner, runJob "iptal" olarak işaretler
+      if (job.state === 'active' || job.claimed) {
+        job.cancelRequested = true; // aktarım hata ile döner, runJob "iptal" olarak işaretler
+        if (job.slot && job.slot.ses) job.slot.ses.abort();
         return;
       }
       job.state = 'cancelled';
@@ -420,7 +460,8 @@ function createQueue({ openSession, onChange, onUploaded }) {
       closing = true;
       clearTimeout(timer);
       for (const j of jobs) if (j.state === 'active') j.cancelRequested = true;
-      if (pumping) {
+      if (running > 0) {
+        for (const slot of slots) if (slot.ses) slot.ses.abort();
         if (session) session.abort();
       } else if (sessionPromise) {
         sessionPromise.then(() => finalize(), () => {});

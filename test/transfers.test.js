@@ -119,8 +119,7 @@ test('iptal: geçici dosya kalmaz, sıradaki başlar', () => setup({}, async ({ 
   });
   await q.add({ direction: 'up', localPath: l('buyuk.bin'), remotePath: '/buyuk.bin', isDir: false });
   await q.add({ direction: 'up', localPath: l('kucuk.txt'), remotePath: '/kucuk.txt', isDir: false });
-  await until(() => q.jobs()[1].state === 'done', 20000);
-  assert.strictEqual(q.jobs()[0].state, 'cancelled');
+  await until(() => q.jobs()[1].state === 'done' && q.jobs()[0].state === 'cancelled', 20000); // artık ikisi aynı anda yürür
   assert.ok(!fs.existsSync(r('buyuk.bin')));
   noParts(s.root);
 }, { slow: 4 }));
@@ -207,11 +206,11 @@ test('geçici dosya kaybolduysa asıl dosya silinmez', () => wrapped({ 'a.txt': 
   assert.strictEqual(fs.readFileSync(r('a.txt'), 'utf8'), 'eski');
 }));
 
-test('aynı anda eklenen klasörler tek oturum açar', () => wrapped({}, {}, async ({ q, sessions, l }) => {
+test('aynı anda eklenen klasörler: bir denetim oturumu ve en çok üç aktarım oturumu', () => wrapped({}, {}, async ({ q, sessions, l }) => {
   for (const n of ['k1', 'k2', 'k3']) { fs.mkdirSync(l(n)); fs.writeFileSync(l(n + '/f.txt'), n); }
   await Promise.all(['k1', 'k2', 'k3'].map((n) => q.add({ direction: 'up', localPath: l(n), remotePath: '/' + n, isDir: true })));
   await until(() => q.jobs().length === 3 && q.jobs().every((j) => j.state === 'done'));
-  assert.strictEqual(sessions.length, 1);
+  assert.ok(sessions.length >= 2 && sessions.length <= 4, String(sessions.length));
 }));
 
 test('aktarım sürerken kapatma: geçici dosya temizlenir, oturum kapanır, bildirim kesilir', () => wrapped({}, { slow: 4 }, async ({ q, s, sessions, seen, l }) => {
@@ -377,3 +376,49 @@ test('yüklenirken değişen dosya: aynı hedefe giden başka bir dosya onun yer
   await until(() => q.jobs().some((j) => j.state === 'asking') || q.jobs().every((j) => j.state === 'done'), 40000);
   assert.ok(q.jobs().some((j) => j.id === a), 'A işi listeden düşmemeli');
 }, { slow: 2 }));
+
+test('eşzamanlı: üç dosya aynı anda aktarılır, hepsi doğru gider', () => setup({}, async ({ q, s, l, r, seen }) => {
+  for (const n of [1, 2, 3, 4]) fs.writeFileSync(l(`p${n}.bin`), pattern(n));
+  for (const n of [1, 2, 3, 4]) q.add({ direction: 'up', localPath: l(`p${n}.bin`), remotePath: `/p${n}.bin`, isDir: false });
+  await until(() => q.jobs().length === 4 && q.jobs().every((j) => j.state === 'done'), 60000);
+  const most = Math.max(...seen.map((jobs) => jobs.filter((j) => j.state === 'active').length));
+  assert.strictEqual(most, 3);
+  for (const n of [1, 2, 3, 4]) assert.ok(fs.readFileSync(r(`p${n}.bin`)).equals(pattern(n)));
+  assert.ok(s.logins <= 4, `giriş sayısı ${s.logins}`);
+  noParts(r('.'));
+}, { slow: 1 }));
+
+test('eşzamanlı: aynı hedefe giden iki iş aynı anda çalışmaz', () => setup({}, async ({ q, l, seen }) => {
+  fs.mkdirSync(l('A')); fs.mkdirSync(l('B'));
+  fs.writeFileSync(l('A/x.bin'), pattern(1));
+  fs.writeFileSync(l('B/x.bin'), pattern(2));
+  q.add({ direction: 'up', localPath: l('A/x.bin'), remotePath: '/x.bin', isDir: false });
+  q.add({ direction: 'up', localPath: l('B/x.bin'), remotePath: '/x.bin', isDir: false });
+  await until(() => q.jobs().length === 2 && q.jobs().every((j) => ['done', 'asking'].includes(j.state)), 60000);
+  assert.ok(seen.every((jobs) => jobs.filter((j) => j.state === 'active').length <= 1));
+}, { slow: 1 }));
+
+test('eşzamanlı: sunucu fazladan bağlantıyı reddederse daha az bağlantıyla biter', async () => {
+  const s = await startServer({ slow: 1 });
+  let calls = 0;
+  const q = createQueue({
+    openSession: async () => {
+      calls += 1;
+      if (calls > 2) throw new FtpError('FTP', 'Sunucu işlemi reddetti: Too many connections');
+      return openSession({ host: '127.0.0.1', port: s.port, user: s.user, password: s.password, secure: false });
+    },
+    onChange: () => {},
+  });
+  const local = tmp();
+  try {
+    for (const n of [1, 2, 3]) {
+      fs.writeFileSync(path.join(local, `k${n}.bin`), pattern(n));
+      q.add({ direction: 'up', localPath: path.join(local, `k${n}.bin`), remotePath: `/k${n}.bin`, isDir: false });
+    }
+    await until(() => q.jobs().length === 3 && q.jobs().every((j) => j.state === 'done'), 60000);
+    for (const n of [1, 2, 3]) assert.ok(fs.readFileSync(path.join(s.root, `k${n}.bin`)).equals(pattern(n)));
+  } finally {
+    q.close();
+    await s.stop();
+  }
+});
