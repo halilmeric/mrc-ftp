@@ -1,0 +1,208 @@
+'use strict';
+// Bir dosya paneli (Mac ya da Sunucu). Sürüklenen şeyin kaynağı paneller arasında bu değişkenle taşınır.
+let dragSource = null;
+
+function progressBar(pct) {
+  const fill = el('i');
+  fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  return el('div', { class: 'bar' }, fill);
+}
+
+// ponytail: her yenilemede tüm satırlar yeniden çizilir; on binlerce girdili klasörde yavaşlarsa sanal liste gerekir.
+function createPane({ root, kind, label, list, ops, onSend, onDropIn, onLoaded }) {
+  const state = { path: null, entries: [], sort: { key: 'name', dir: 1 }, selected: new Set(), anchor: null,
+    renaming: null, confirming: null, creating: false, error: '', loading: false, ghost: null };
+
+  const crumb = el('div', { class: 'crumb' });
+  const cols = el('div', { class: 'cols' });
+  const errBox = el('div', { class: 'perr', hidden: true });
+  const rows = el('div', { class: 'rows' });
+  root.append(crumb, cols, errBox, rows);
+
+  const sorted = () => {
+    const { key, dir } = state.sort;
+    return [...state.entries].sort((a, b) => (b.isDir - a.isDir) || dir * (
+      key === 'name' ? a.name.localeCompare(b.name, 'tr')
+        : key === 'size' ? a.size - b.size
+          : String(a.modified || '').localeCompare(String(b.modified || ''))) || a.name.localeCompare(b.name, 'tr'));
+  };
+  const picked = () => state.entries.filter((e) => state.selected.has(e.name));
+
+  function nameInput(value, onDone) {
+    const input = el('input', { value, spellcheck: 'false', 'aria-label': 'Ad' });
+    let done = false;
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      const name = input.value.trim();
+      onDone(commit && name && name !== value && !/[\\/]/.test(name) ? name : null);
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') finish(true);
+      if (e.key === 'Escape') finish(false);
+      e.stopPropagation();
+    });
+    input.addEventListener('blur', () => finish(false));
+    setTimeout(() => { input.focus(); input.select(); });
+    return input;
+  }
+
+  async function act(fn) {
+    state.error = '';
+    try {
+      await fn();
+    } catch (err) {
+      state.error = err.message || 'İşlem yapılamadı.';
+    }
+    await refresh();
+  }
+
+  function rowFor(entry, index, all) {
+    const icon = el('i', { class: entry.isDir ? 'ic' : 'ic f' });
+    if (state.confirming === entry.name) {
+      return el('div', { class: 'r ask' },
+        el('span', {}, `${entry.name} silinsin mi?${entry.isDir ? ' İçindekilerle birlikte silinir.' : ''}`),
+        el('div', { class: 'acts' },
+          el('button', { type: 'button', class: 'd', onclick: () => { state.confirming = null; act(() => ops.remove(joinPath(state.path, entry.name), entry.isDir)); } }, 'Sil'),
+          el('button', { type: 'button', onclick: () => { state.confirming = null; render(); } }, 'Vazgeç')));
+    }
+    if (state.renaming === entry.name) {
+      return el('div', { class: 'r sel' }, el('div', { class: 'n' }, icon, nameInput(entry.name, (name) => {
+        state.renaming = null;
+        if (name) act(() => ops.rename(joinPath(state.path, entry.name), joinPath(state.path, name)));
+        else render();
+      })), el('span', { class: 'm' }), el('span', { class: 'm' }));
+    }
+    return el('div', {
+      class: 'r' + (state.selected.has(entry.name) ? ' sel' : ''), draggable: 'true', role: 'row',
+      onclick: (e) => {
+        if (e.shiftKey && state.anchor != null) {
+          const [a, b] = [state.anchor, index].sort((x, y) => x - y);
+          state.selected = new Set(all.slice(a, b + 1).map((x) => x.name));
+        } else if (e.metaKey) {
+          if (state.selected.has(entry.name)) state.selected.delete(entry.name); else state.selected.add(entry.name);
+          state.anchor = index;
+        } else {
+          state.selected = new Set([entry.name]);
+          state.anchor = index;
+        }
+        render();
+      },
+      ondblclick: () => (entry.isDir ? go(joinPath(state.path, entry.name)) : onSend(state.path, [entry])),
+      ondragstart: (e) => {
+        if (!state.selected.has(entry.name)) { state.selected = new Set([entry.name]); state.anchor = index; }
+        dragSource = { from: kind, dir: state.path, entries: picked() };
+        e.dataTransfer.setData('application/x-mrc', kind);
+        e.dataTransfer.effectAllowed = 'copy';
+      },
+      ondragend: () => { dragSource = null; },
+      oncontextmenu: (e) => {
+        if (!ops) return;
+        e.preventDefault();
+        state.selected = new Set([entry.name]);
+        render();
+        showMenu(e.clientX, e.clientY, [
+          { label: 'Yeniden adlandır', run: () => { state.renaming = entry.name; render(); } },
+          { label: 'Sil', danger: true, run: () => { state.confirming = entry.name; render(); } },
+        ]);
+      },
+    }, el('div', { class: 'n' }, icon, el('span', {}, entry.name)),
+    el('span', { class: 'm' }, entry.isDir ? 'klasör' : formatSize(entry.size)),
+    el('span', { class: 'm' }, formatDate(entry.modified)));
+  }
+
+  function render() {
+    // Yol çubuğu
+    const parts = state.path ? state.path.split('/').filter(Boolean) : [];
+    const crumbs = [el('button', { type: 'button', onclick: () => state.path && go('/') }, label)];
+    parts.forEach((part, i) => {
+      crumbs.push('›', el('button', { type: 'button', onclick: () => go('/' + parts.slice(0, i + 1).join('/')) }, part));
+    });
+    crumb.replaceChildren(...crumbs);
+
+    const head = (key, text) => el('button', { type: 'button', onclick: () => {
+      state.sort = { key, dir: state.sort.key === key ? -state.sort.dir : 1 };
+      render();
+    } }, text + (state.sort.key === key ? (state.sort.dir === 1 ? ' ↑' : ' ↓') : ''));
+    cols.replaceChildren(head('name', 'Ad'), head('size', 'Boyut'), head('modified', 'Değişti'));
+
+    errBox.hidden = !state.error;
+    errBox.textContent = state.error;
+    rows.classList.toggle('loading', state.loading);
+
+    if (state.path == null) {
+      rows.replaceChildren(el('div', { class: 'empty' }, 'Bir site seç'));
+      return;
+    }
+    const all = sorted();
+    const out = [];
+    if (state.creating) {
+      out.push(el('div', { class: 'r sel' }, el('div', { class: 'n' }, el('i', { class: 'ic' }), nameInput('', (name) => {
+        state.creating = false;
+        if (name) act(() => ops.mkdir(joinPath(state.path, name)));
+        else render();
+      })), el('span', { class: 'm' }), el('span', { class: 'm' })));
+    }
+    all.forEach((entry, i) => out.push(rowFor(entry, i, all)));
+    if (state.ghost) {
+      out.push(el('div', { class: 'r ghost' }, el('div', { class: 'n' }, el('i', { class: 'ic f' }), el('span', {}, `${state.ghost.name} yükleniyor`)), progressBar(state.ghost.pct)));
+    }
+    if (out.length === 0) out.push(el('div', { class: 'empty' }, 'Bu klasör boş'));
+    rows.replaceChildren(...out);
+  }
+
+  async function go(path) {
+    state.loading = true;
+    render();
+    try {
+      const entries = await list(path);
+      Object.assign(state, { path, entries, selected: new Set(), anchor: null, renaming: null, confirming: null, creating: false, error: '' });
+    } catch (err) {
+      state.error = err.message || 'Klasör açılamadı.';
+    }
+    state.loading = false;
+    render();
+    if (onLoaded) onLoaded(state.entries.length, state.path);
+  }
+  const refresh = () => (state.path == null ? Promise.resolve() : go(state.path));
+
+  // Bırakma: karşı panelden ya da (yalnızca sunucu panelinde) Finder'dan.
+  const accepts = (e) => state.path != null && (dragSource ? dragSource.from !== kind : (kind === 'remote' && e.dataTransfer.types.includes('Files')));
+  root.addEventListener('dragover', (e) => {
+    if (!accepts(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    root.classList.add('drop');
+  });
+  root.addEventListener('dragleave', (e) => { if (!root.contains(e.relatedTarget)) root.classList.remove('drop'); });
+  root.addEventListener('drop', (e) => {
+    root.classList.remove('drop');
+    if (!accepts(e)) return;
+    e.preventDefault();
+    if (dragSource) {
+      onDropIn(dragSource, state.path);
+    } else {
+      const entries = [...e.dataTransfer.items].filter((it) => it.kind === 'file').map((it) => {
+        const fsEntry = it.webkitGetAsEntry && it.webkitGetAsEntry();
+        const file = it.getAsFile();
+        return file && { name: file.name, isDir: Boolean(fsEntry && fsEntry.isDirectory), size: file.size, localPath: mrc.pathForFile(file) };
+      }).filter((x) => x && x.localPath);
+      if (entries.length) onDropIn({ from: 'finder', dir: null, entries }, state.path);
+    }
+    dragSource = null;
+  });
+
+  render();
+  return {
+    go, refresh,
+    get path() { return state.path; },
+    get count() { return state.entries.length; },
+    newFolder() { if (state.path != null && ops) { state.creating = true; render(); } },
+    setGhost(ghost) {
+      const changed = JSON.stringify(ghost) !== JSON.stringify(state.ghost);
+      state.ghost = ghost;
+      if (changed && !state.renaming && !state.creating) render();
+    },
+    reset() { Object.assign(state, { path: null, entries: [], selected: new Set(), error: '', ghost: null }); render(); if (onLoaded) onLoaded(0, null); },
+  };
+}
