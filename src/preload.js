@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('mrc', {
   trust: call('trust'),
   disconnect: call('disconnect'),
   remote: { list: call('remote:list'), mkdir: call('remote:mkdir'), rename: call('remote:rename'), remove: call('remote:remove'), chmod: call('remote:chmod') },
-  local: { home: call('local:home'), list: call('local:list'), downloads: call('local:downloads'), pickDir: call('local:pickDir') },
+  local: { home: call('local:home'), list: call('local:list'), downloads: call('local:downloads'), pickDir: call('local:pickDir'), pickKey: call('local:pickKey') },
   edit: {
     open: call('edit:open'), stopAll: call('edit:stopAll'),
     onChange: (cb) => { ipcRenderer.on('edits:change', (_event, count) => cb(count)); },

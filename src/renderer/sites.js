@@ -14,6 +14,8 @@ function initSites() {
     untrusted: (c) => `Sertifikayı tanınmayan bir kurum vermiş: ${c.issuer}`,
     expired: (c) => `Sertifikanın süresi ${c.validTo} tarihinde dolmuş.`,
     changed: () => 'Sertifika son bağlantıdan bu yana değişmiş.',
+    'ssh-new': () => 'Bu sunucuya ilk kez bağlanıyorsun. Parmak izini hosting panelinde gösterilen SSH anahtar parmak iziyle karşılaştırabilirsin.',
+    'ssh-changed': () => 'Sunucunun anahtarı son bağlantıdan bu yana değişmiş. Sunucu taşınmadıysa ya da yeniden kurulmadıysa bağlanma.',
   };
 
   function render() {
@@ -97,6 +99,10 @@ function initSites() {
   function askTrust(site, cert, password) {
     pendingTrust = { site, cert, password };
     $('cert-reason').textContent = (CERT_TEXT[cert.reason] || CERT_TEXT.untrusted)(cert);
+    const ssh = String(cert.reason).startsWith('ssh');
+    $('cert-title').textContent = cert.reason === 'ssh-new' ? 'Bu sunucuyu ilk kez görüyoruz' : ssh ? 'Sunucunun anahtarı değişmiş' : 'Bu sunucunun kimliği doğrulanamadı';
+    $('cert-who').hidden = ssh;
+    $('cert-hint').hidden = ssh;
     $('cert-who').textContent = `Sertifika sahibi: ${cert.subject || 'bilinmiyor'} · Veren: ${cert.issuer || 'bilinmiyor'}`;
     $('cert-fp').textContent = cert.fingerprint;
     $('dlg-cert').showModal();
@@ -114,7 +120,9 @@ function initSites() {
   let pendingPass = null;
   function askPassword(site) {
     pendingPass = site;
-    $('pass-title').textContent = `${site.name} için şifre`;
+    const key = site.auth === 'key';
+    $('pass-title').textContent = `${site.name} için ${key ? 'anahtar parolası' : 'şifre'}`;
+    $('p-pass-label').textContent = key ? 'Anahtar parolası' : 'Şifre';
     $('p-pass').value = '';
     $('dlg-pass').showModal();
   }
@@ -129,6 +137,18 @@ function initSites() {
 
   // Site formu
   let editing = null;
+  let keyPath = '';
+  const isSsh = () => $('f-secure').value === 'sftp';
+  const byKey = () => isSsh() && $('f-auth').value === 'key';
+  // Bağlantı ve giriş türüne göre görünen alanlar.
+  function syncForm() {
+    $('f-plain-warn').hidden = $('f-secure').value !== '0';
+    $('f-auth-row').hidden = !isSsh();
+    $('f-key-row').hidden = !byKey();
+    $('f-key').textContent = keyPath || 'Seçilmedi';
+    $('f-key').title = keyPath;
+    $('f-pass-label').textContent = byKey() ? 'Anahtar parolası (yoksa boş bırak)' : 'Şifre';
+  }
   function openForm(site) {
     editing = site || null;
     $('site-form-title').textContent = site ? 'Siteyi düzenle' : 'Yeni site';
@@ -139,18 +159,32 @@ function initSites() {
     $('f-pass').placeholder = site && site.hasPassword ? 'Değiştirmek için yaz' : '';
     $('f-port').value = site ? site.port : 21;
     $('f-dir').value = site ? site.startDir : '';
-    $('f-secure').value = !site || site.secure ? '1' : '0';
-    $('f-plain-warn').hidden = $('f-secure').value === '1';
+    $('f-secure').value = site && site.protocol === 'sftp' ? 'sftp' : !site || site.secure ? '1' : '0';
+    $('f-auth').value = site && site.auth === 'key' ? 'key' : 'password';
+    keyPath = (site && site.keyPath) || '';
+    syncForm();
     for (const small of $('site-form').querySelectorAll('.err')) small.hidden = true;
     $('dlg-site').showModal();
   }
   $('add-site').addEventListener('click', () => openForm());
   $('f-cancel').addEventListener('click', () => $('dlg-site').close());
-  $('f-secure').addEventListener('change', () => { $('f-plain-warn').hidden = $('f-secure').value === '1'; });
+  $('f-secure').addEventListener('change', () => {
+    // Port elle değiştirilmediyse bağlantı türünün varsayılanına döner.
+    if (['', '21', '22'].includes($('f-port').value.trim())) $('f-port').value = isSsh() ? 22 : 21;
+    syncForm();
+  });
+  $('f-auth').addEventListener('change', syncForm);
+  $('f-key-pick').addEventListener('click', async () => {
+    const picked = await mrc.local.pickKey();
+    if (picked) keyPath = picked.path;
+    syncForm();
+  });
   $('site-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const needPass = !(editing && editing.hasPassword);
-    let ok = true;
+    const auth = byKey() ? 'key' : 'password';
+    const needPass = auth === 'password' && !(editing && editing.hasPassword && editing.auth !== 'key');
+    let ok = !byKey() || Boolean(keyPath);
+    $('f-key-row').querySelector('.err').hidden = ok;
     for (const [id, required] of [['f-host', true], ['f-user', true], ['f-pass', needPass]]) {
       const missing = required && !$(id).value.trim();
       $(id).parentElement.querySelector('.err').hidden = !missing;
@@ -164,9 +198,12 @@ function initSites() {
       host: $('f-host').value.trim(),
       user: $('f-user').value.trim(),
       password: password || undefined,
-      port: Number($('f-port').value) || 21,
+      port: Number($('f-port').value) || (isSsh() ? 22 : 21),
+      protocol: isSsh() ? 'sftp' : 'ftp',
+      auth,
+      keyPath,
       startDir: $('f-dir').value.trim() || '/',
-      secure: $('f-secure').value === '1',
+      secure: $('f-secure').value !== '0',
     });
     $('dlg-site').close();
     await reload();

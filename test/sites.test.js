@@ -77,3 +77,27 @@ test('şifre çözülemezse site şifresiz sayılır', () => {
   const broken = createSiteStore({ file, encrypt: enc, decrypt: () => { throw new Error('anahtar yok'); } });
   assert.strictEqual(broken.get(id).password, null);
 });
+
+test('SFTP sitesi: alanlar saklanır, varsayılan port 22, anahtar parolası şifreli durur', () => {
+  const file = tmpFile();
+  const store = createSiteStore({ file, encrypt: enc, decrypt: dec });
+  const saved = store.save({ host: 'ornek.com', user: 'ali', protocol: 'sftp', auth: 'key', keyPath: '/Users/ali/.ssh/id_ed25519', password: 'anahtar-parolasi' });
+  assert.deepStrictEqual([saved.protocol, saved.auth, saved.keyPath, saved.port, saved.secure], ['sftp', 'key', '/Users/ali/.ssh/id_ed25519', 22, true]);
+  const [row] = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.strictEqual(row.secret, 'ENC:anahtar-parolasi'); // yalnızca şifrelenmiş hali yazılır
+  assert.ok(!('password' in row) && !('passphrase' in row));
+  assert.strictEqual(store.get(saved.id).password, 'anahtar-parolasi');
+  const plainKey = store.save({ host: 'b.com', user: 'ali', protocol: 'sftp', auth: 'key', keyPath: '/k' });
+  assert.strictEqual(plainKey.hasPassword, false);
+});
+
+test('eski kayıt ftp sayılır; protokol değişince parmak izi sıfırlanır', () => {
+  const file = tmpFile();
+  fs.writeFileSync(file, JSON.stringify([{ id: 'eski', name: 'Eski', host: 'a.com', port: 21, user: 'u', secure: true, startDir: '/', fingerprint: 'AA', secret: null }]));
+  const store = createSiteStore({ file, encrypt: enc, decrypt: dec });
+  assert.deepStrictEqual([store.get('eski').protocol, store.get('eski').auth], ['ftp', 'password']);
+  const same = store.save({ id: 'eski', host: 'a.com', port: 21, user: 'u' });
+  assert.strictEqual(same.fingerprint, 'AA');
+  const moved = store.save({ id: 'eski', host: 'a.com', port: 21, user: 'u', protocol: 'sftp' });
+  assert.strictEqual(moved.fingerprint, null);
+});

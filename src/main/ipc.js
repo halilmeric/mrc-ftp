@@ -1,8 +1,10 @@
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { app, dialog, ipcMain, safeStorage, shell } = require('electron');
 const { createSiteStore } = require('./sites');
 const { openSession, FtpError } = require('./ftp');
+const { openSftpSession } = require('./sftp');
 const { createQueue } = require('./transfers');
 const localfs = require('./localfs');
 const { createEdits } = require('./edits');
@@ -68,13 +70,17 @@ function registerIpc(win) {
       const site = store.get(siteId);
       if (!site) throw new FtpError('NET', 'Site bulunamadı.');
       const pass = password || site.password;
-      if (!pass) throw new FtpError('NEED_PASSWORD', 'Şifre gerekli.');
-      const cfg = { host: site.host, port: site.port, user: site.user, password: pass, secure: site.secure, fingerprint: site.fingerprint };
-      const session = await openSession(cfg);
+      const sftp = site.protocol === 'sftp';
+      const byKey = sftp && site.auth === 'key';
+      if (!pass && !byKey) throw new FtpError('NEED_PASSWORD', 'Şifre gerekli.'); // parolasız anahtar şifre istemez
+      const cfg = { host: site.host, port: site.port, user: site.user, fingerprint: site.fingerprint,
+        ...(byKey ? { keyPath: site.keyPath, passphrase: pass } : { password: pass }), secure: site.secure };
+      const open = sftp ? openSftpSession : openSession;
+      const session = await open(cfg);
       disconnect();
       let edits = null;
       const queue = createQueue({
-        openSession: () => openSession(cfg),
+        openSession: () => open(cfg),
         onChange: (jobs) => send('transfers:change', jobs),
         onUploaded: (remotePath, baseline) => edits.updateBaseline(remotePath, baseline),
       });
@@ -87,8 +93,8 @@ function registerIpc(win) {
         },
         onChange: (count) => send('edits:change', count),
       });
-      active = { siteId, session, queue, edits };
-      return { startDir: site.startDir };
+      active = { siteId, session, queue, edits, cfg, sftp };
+      return { startDir: site.startDir, terminal: sftp };
     },
     'trust': (siteId, fingerprint) => store.trust(siteId, fingerprint),
     'disconnect': async () => { await leaveOrThrow(); disconnect(); },
@@ -105,6 +111,13 @@ function registerIpc(win) {
     'local:downloads': () => ({ path: app.getPath('downloads') }),
     'local:pickDir': async () => {
       const res = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], buttonLabel: 'Buraya indir' });
+      return res.canceled ? null : { path: res.filePaths[0] };
+    },
+    'local:pickKey': async () => {
+      const res = await dialog.showOpenDialog(win, {
+        defaultPath: path.join(os.homedir(), '.ssh'), properties: ['openFile', 'showHiddenFiles'],
+        buttonLabel: 'Anahtarı seç', message: 'SSH özel anahtar dosyasını seç (.pub olmayan)',
+      });
       return res.canceled ? null : { path: res.filePaths[0] };
     },
     'edit:open': (remotePath, entry) => need().edits.start(String(remotePath), { size: Number(entry.size), modified: entry.modified }),

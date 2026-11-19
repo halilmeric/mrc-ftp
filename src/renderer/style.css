@@ -124,6 +124,9 @@ dialog form, dialog label { display: flex; flex-direction: column; gap: 5px; }
 dialog form { gap: 12px; }
 dialog label { font-size: 12px; color: var(--wm); }
 dialog input, dialog select { height: 30px; border: 1px solid var(--wl); border-radius: 7px; background: var(--win); padding: 0 9px; color: var(--wfg); }
+dialog .field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--wm); }
+dialog .pick { display: flex; align-items: center; gap: 10px; min-width: 0; }
+dialog .pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 dialog .row2 { display: grid; grid-template-columns: 90px 1fr; gap: 10px; }
 dialog .acts { justify-content: flex-end; margin-top: 6px; }
 dialog .acts button { padding: 8px 14px; font-size: 13px; }
