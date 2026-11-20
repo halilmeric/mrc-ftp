@@ -56,15 +56,16 @@ app.whenReady().then(() => {
       ],
     },
     { label: 'Dosya', submenu: [{ label: 'Yeni Sekme', accelerator: 'CmdOrCtrl+T', click: newTab }, { type: 'separator' }, { role: 'close' }] },
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
+    { role: 'editMenu', label: 'Düzen' },
+    { role: 'viewMenu', label: 'Görünüm' },
     {
       role: 'window',
       label: 'Pencere',
       submenu: [
-        { role: 'minimize' }, { role: 'zoom' }, { type: 'separator' },
-        { role: 'selectPreviousTab', accelerator: 'Cmd+Shift+[' }, { role: 'selectNextTab', accelerator: 'Cmd+Shift+]' },
-        { role: 'moveTabToNewWindow' }, { role: 'mergeAllWindows' }, { type: 'separator' }, { role: 'front' },
+        { role: 'minimize', label: 'Simge Durumuna Küçült' }, { role: 'zoom', label: 'Büyüt/Küçült' }, { type: 'separator' },
+        // Bu rollerin hazır adı boş geliyor; ad elle verilir.
+        { role: 'selectPreviousTab', label: 'Önceki Sekme', accelerator: 'Cmd+Shift+[' }, { role: 'selectNextTab', label: 'Sonraki Sekme', accelerator: 'Cmd+Shift+]' },
+        { role: 'moveTabToNewWindow', label: 'Sekmeyi Yeni Pencereye Taşı' }, { role: 'mergeAllWindows', label: 'Tüm Pencereleri Birleştir' }, { type: 'separator' }, { role: 'front', label: 'Tümünü Öne Getir' },
       ],
     },
   ]));
