@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dfe3f0"/></linearGradient><linearGradient id="c" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7a4dff"/><stop offset="1" stop-color="#ff4d9d"/></linearGradient>
+<linearGradient id="hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="sq"><rect x="12" y="12" width="232" height="232" rx="56"/></clipPath>
+<filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000" flood-opacity=".28"/></filter>
+</defs>
+<g clip-path="url(#sq)"><rect x="12" y="12" width="232" height="232" fill="url(#bg)"/><path d="M64 196 L128 140 L192 196 V226 L128 170 L64 226 Z" fill="url(#c)" opacity=".3" stroke="url(#c)" stroke-opacity=".3" stroke-width="8" stroke-linejoin="round" transform="translate(0 -22)"/>
+<path d="M64 150 L128 94 L192 150 V180 L128 124 L64 180 Z" fill="url(#c)" opacity=".6" stroke="url(#c)" stroke-opacity=".6" stroke-width="8" stroke-linejoin="round" transform="translate(0 -18)"/>
+<g filter="url(#sh)"><path d="M64 104 L128 48 L192 104 V134 L128 78 L64 134 Z" fill="url(#c)" stroke="url(#c)" stroke-width="8" stroke-linejoin="round" transform="translate(0 -6)"/></g></g>
+<rect x="13" y="13" width="230" height="230" rx="55" fill="none" stroke="url(#hl)" stroke-width="2"/>
+</svg>
