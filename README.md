@@ -35,7 +35,7 @@ Uygulama Apple tarafından imzalanmamıştır (yalnızca ad-hoc imza). Derlendi�
 
 ## Yol haritası
 
-Sırada: klasör eşitleme ve sekmeler.
+Sırada: sekmeler.
 
 ## Lisans
 
