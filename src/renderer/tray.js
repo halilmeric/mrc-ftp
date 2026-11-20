@@ -35,6 +35,8 @@ function createTray({ root, panes }) {
     mrc.transfers.setLimit(Number(limit.value));
     try { localStorage.setItem('mrc.limit', limit.value); } catch { /* yalnızca hatırlanmaz */ }
   });
+  // Sınır tüm sekmelerde ortaktır: başka sekmede değişince buradaki seçim de güncellenir.
+  addEventListener('storage', (e) => { if (e.key === 'mrc.limit' && e.newValue != null) limit.value = e.newValue; });
   root.append(el('div', { class: 'tray-head' }, el('b', {}, 'Aktarımlar'), head, el('span', { class: 'grow' }), limit),
     el('div', { class: 'total' }, totalBar, el('small', {}, totalPct, totalEta)), list);
 

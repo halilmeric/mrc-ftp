@@ -45,7 +45,9 @@ function attach(win, { openTab }) {
   const { store, limiter, tmpRoot, contexts, channels } = shared();
   const ctx = { input: () => {}, siteId: () => null, sitesChanged: () => {} };
   const ownId = win.webContents.id;
+  let leaving = false; // true: kapanmadan önce sorulacak şey kalmadı
   let active = null; // { siteId, session, queue, edits, term, cwd }
+  let connecting = null; // bağlanmakta olunan sitenin kimliği
   // Düzenleme ve önizleme kopyaları pencereye özel klasörde durur; o pencerenin bağlantısı kesilince silinir.
   const tmp = path.join(tmpRoot, String(ownId));
   const send = (channel, value) => { if (!win.isDestroyed()) win.webContents.send(channel, value); };
@@ -98,6 +100,7 @@ function attach(win, { openTab }) {
     active.edits.flush();
     const left = await active.queue.drainEdits(15000);
     if (left === 0) return true;
+    win.show(); // soru arka plandaki bir sekmede görünmez kalmasın
     const res = await dialog.showMessageBox(win, {
       type: 'warning',
       message: 'Yüklenmemiş düzenlemeler var',
@@ -142,7 +145,15 @@ function attach(win, { openTab }) {
       const cfg = { host: site.host, port: site.port, user: site.user, fingerprint: site.fingerprint,
         ...(byKey ? { keyPath: site.keyPath, passphrase: pass } : { password: pass }), secure: site.secure };
       const open = sftp ? openSftpSession : openSession;
-      const session = await open(cfg);
+      connecting = siteId;
+      let session;
+      try {
+        session = await open(cfg);
+      } finally {
+        connecting = null;
+      }
+      // Sekme bağlanırken kapatıldıysa yeni açılan bağlantı sahipsiz kalmasın.
+      if (win.isDestroyed()) { session.close(); throw new FtpError('CANCELLED', ''); }
       disconnect();
       let edits = null;
       const queue = createQueue({
@@ -168,7 +179,8 @@ function attach(win, { openTab }) {
       win.setTitle(site.name);
       return { startDir: site.startDir, terminal: sftp, favorites: site.favorites };
     },
-    'sites:favorites': (id, list) => store.setFavorites(String(id), list),
+    'sites:favorites': (id) => { const site = store.get(String(id)); return site ? site.favorites : []; },
+    'sites:favorite': (id, dir, on) => store.toggleFavorite(String(id), String(dir), Boolean(on)),
     'trust': (siteId, fingerprint) => { store.trust(siteId, fingerprint); tellOthers(); },
     'window:newTab': (siteId) => { openTab(siteId ? String(siteId) : null); },
     'disconnect': async () => { await leaveOrThrow(); disconnect(); },
@@ -226,7 +238,9 @@ function attach(win, { openTab }) {
 
   ctx.handlers = handlers;
   ctx.input = (data) => { if (active && active.term) active.term.write(data); };
-  ctx.siteId = () => (active ? active.siteId : null);
+  ctx.siteId = () => (active ? active.siteId : connecting);
+  ctx.confirmLeave = confirmLeave;
+  ctx.allowClose = () => { leaving = true; };
   ctx.sitesChanged = () => send('sites:changed');
   contexts.set(ownId, ctx);
   // Kanallar bir kez kaydedilir; her çağrı gönderen pencerenin bağlamında çalışır.
@@ -245,7 +259,6 @@ function attach(win, { openTab }) {
     });
   }
   // Pencere kapanırken de aynı soru: yüklenmemiş düzenleme yoksa hemen kapanır.
-  let leaving = false;
   win.on('close', (event) => {
     if (leaving || !active) return;
     event.preventDefault();
@@ -260,4 +273,13 @@ function attach(win, { openTab }) {
   win.on('page-title-updated', (event) => event.preventDefault());
 }
 
-module.exports = { attach };
+// Uygulamadan çıkarken: her sekmeye sırayla sorulur. Biri "Vazgeç" derse hiçbir sekme kapanmaz.
+async function confirmQuit() {
+  if (!common) return true;
+  const all = [...new Set(common.contexts.values())];
+  for (const ctx of all) if (!(await ctx.confirmLeave())) return false;
+  for (const ctx of all) ctx.allowClose();
+  return true;
+}
+
+module.exports = { attach, confirmQuit };

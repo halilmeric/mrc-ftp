@@ -9,7 +9,7 @@ const call = (channel) => async (...args) => {
 contextBridge.exposeInMainWorld('mrc', {
   sites: {
     onChange: (cb) => { ipcRenderer.on('sites:changed', () => cb()); },
-    list: call('sites:list'), save: call('sites:save'), remove: call('sites:remove'), favorites: call('sites:favorites'),
+    list: call('sites:list'), save: call('sites:save'), remove: call('sites:remove'), favorites: call('sites:favorites'), favorite: call('sites:favorite'),
   },
   newTab: call('window:newTab'),
   connect: call('connect'),

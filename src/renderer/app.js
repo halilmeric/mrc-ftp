@@ -88,15 +88,14 @@
   $('st-edit-stop').addEventListener('click', () => mrc.edit.stopAll());
 
   // Sık kullanılan klasörler: o sitenin kayıtlı sunucu klasörleri.
-  $('btn-fav').addEventListener('click', (e) => {
+  $('btn-fav').addEventListener('click', async (e) => {
     e.stopPropagation(); // menüyü açan tıklama onu kapatmasın
     if (!site || remote.path == null) return;
     const here = remote.path;
-    const saved = favorites.includes(here);
-    const toggle = async () => {
-      favorites = await mrc.sites.favorites(site.id, saved ? favorites.filter((p) => p !== here) : [...favorites, here]);
-    };
     const box = $('btn-fav').getBoundingClientRect();
+    favorites = await mrc.sites.favorites(site.id); // aynı site başka sekmede de açık olabilir: güncel liste
+    const saved = favorites.includes(here);
+    const toggle = async () => { favorites = await mrc.sites.favorite(site.id, here, !saved); };
     showMenu(box.left, box.bottom + 4, [
       { label: saved ? 'Bu klasörü çıkar' : 'Bu klasörü ekle', run: toggle },
       ...favorites.map((p) => ({ label: p, run: () => remote.go(p) })),

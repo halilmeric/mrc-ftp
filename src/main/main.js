@@ -1,5 +1,5 @@
 const { app, BrowserWindow, Menu } = require('electron');
-const { attach } = require('./ipc');
+const { attach, confirmQuit } = require('./ipc');
 const { webPreferences, page, lock } = require('./window');
 
 const TABS = 'mrc-ftp'; // aynı kimlikli pencereler macOS'te sekme olarak birleşebilir
@@ -39,12 +39,32 @@ app.whenReady().then(() => {
     { label: 'Dosya', submenu: [{ label: 'Yeni Sekme', accelerator: 'CmdOrCtrl+T', click: newTab }, { type: 'separator' }, { role: 'close' }] },
     { role: 'editMenu' },
     { role: 'viewMenu' },
-    { role: 'windowMenu' },
+    {
+      role: 'window',
+      label: 'Pencere',
+      submenu: [
+        { role: 'minimize' }, { role: 'zoom' }, { type: 'separator' },
+        { role: 'selectPreviousTab', accelerator: 'Cmd+Shift+[' }, { role: 'selectNextTab', accelerator: 'Cmd+Shift+]' },
+        { role: 'moveTabToNewWindow' }, { role: 'mergeAllWindows' }, { type: 'separator' }, { role: 'front' },
+      ],
+    },
   ]));
   createWindow();
   app.on('new-window-for-tab', newTab); // sekme çubuğundaki "+"
   app.on('activate', () => {
     if (mainWindows.size === 0) createWindow();
+  });
+});
+
+// ⌘Q: önce tüm sekmelere sorulur; yüklenmemiş düzenleme için "Vazgeç" denirse sekmelerin hiçbiri kapanmaz.
+let quitting = false;
+app.on('before-quit', (event) => {
+  if (quitting) return;
+  event.preventDefault();
+  confirmQuit().then((ok) => {
+    if (!ok) return;
+    quitting = true;
+    app.quit();
   });
 });
 

@@ -116,3 +116,12 @@ test('sık kullanılanlar: bilinmeyen site için kayıt yapılmaz', () => {
   const store = createSiteStore({ file: tmpFile(), encrypt: enc, decrypt: dec });
   assert.deepStrictEqual(store.setFavorites('yok', ['/a']), []);
 });
+
+test('sık kullanılanlar tek tek eklenir ve çıkarılır; iki sekmenin eklediği birbirini ezmez', () => {
+  const store = createSiteStore({ file: tmpFile(), encrypt: enc, decrypt: dec });
+  const site = store.save(input);
+  assert.deepStrictEqual(store.toggleFavorite(site.id, '/a', true), ['/a']);
+  assert.deepStrictEqual(store.toggleFavorite(site.id, '/b', true), ['/a', '/b']); // öbür sekme eski listeyi bilmeden ekler
+  assert.deepStrictEqual(store.toggleFavorite(site.id, '/a', false), ['/b']);
+  assert.deepStrictEqual(store.toggleFavorite('yok', '/a', true), []);
+});

@@ -72,6 +72,14 @@ function createSiteStore({ file, encrypt, decrypt }) {
       write(rows.map((r) => (r.id === id ? { ...r, favorites } : r)));
       return favorites;
     },
+    // Tek bir klasörü ekler ya da çıkarır. Liste her seferinde dosyadan okunur: aynı site iki sekmede açıkken
+    // biri öbürünün eklediğini ezmez.
+    toggleFavorite(id, dir, on) {
+      const row = read().find((r) => r.id === id);
+      if (!row) return [];
+      const rest = (row.favorites || []).filter((p) => p !== dir);
+      return this.setFavorites(id, on ? [...rest, dir] : rest);
+    },
     trust(id, fingerprint) {
       write(read().map((r) => (r.id === id ? { ...r, fingerprint } : r)));
     },
