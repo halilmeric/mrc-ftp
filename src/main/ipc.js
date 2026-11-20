@@ -14,18 +14,40 @@ const { createLimiter } = require('./throttle');
 
 const MAX_PREVIEW = 50 * 1024 * 1024;
 
-// Arayüzün ana sürece açılan tek kapısı. Hatalar { code, message, cert } olarak taşınır; şifre hiçbir yanıtta yer almaz.
-function registerIpc(win) {
-  const store = createSiteStore({
-    file: path.join(app.getPath('userData'), 'sites.json'),
-    encrypt: (text) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text).toString('base64') : null),
-    decrypt: (blob) => safeStorage.decryptString(Buffer.from(blob, 'base64')),
+// Tüm pencerelerin paylaştığı şeyler: site listesi, hız sınırı ve geçici klasörün kökü.
+let common = null;
+function shared() {
+  if (common) return common;
+  const tmpRoot = path.join(app.getPath('temp'), 'mrc-ftp');
+  fs.rmSync(tmpRoot, { recursive: true, force: true }); // önceki çalıştırmadan kalan kopyalar
+  common = {
+    store: createSiteStore({
+      file: path.join(app.getPath('userData'), 'sites.json'),
+      encrypt: (text) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text).toString('base64') : null),
+      decrypt: (blob) => safeStorage.decryptString(Buffer.from(blob, 'base64')),
+    }),
+    limiter: createLimiter(), // hız sınırı tüm sekmelerin toplamına uygulanır
+    tmpRoot,
+    contexts: new Map(), // webContents kimliği -> o pencerenin bağlamı
+    channels: new Set(),
+  };
+  ipcMain.on('term:input', (event, data) => {
+    const ctx = common.contexts.get(event.sender.id);
+    if (ctx) ctx.input(String(data));
   });
-  const limiter = createLimiter(); // hız sınırı bağlantıdan bağımsızdır
-  let active = null; // { siteId, session, queue, edits }
-  // Düzenleme ve önizleme kopyaları burada durur; bağlantı kesilince ve açılışta silinir.
-  const tmp = path.join(app.getPath('temp'), 'mrc-ftp');
-  fs.rmSync(tmp, { recursive: true, force: true });
+  return common;
+}
+
+// Bir pencereyi (sekmeyi) ana sürece bağlar. Her pencerenin kendi bağlantısı, kuyruğu, düzenlemeleri ve terminali vardır;
+// arayüzden gelen istek, geldiği pencerenin bağlamına gider. Hatalar { code, message, cert } olarak taşınır;
+// şifre hiçbir yanıtta yer almaz.
+function attach(win, { openTab }) {
+  const { store, limiter, tmpRoot, contexts, channels } = shared();
+  const ctx = { input: () => {}, siteId: () => null, sitesChanged: () => {} };
+  const ownId = win.webContents.id;
+  let active = null; // { siteId, session, queue, edits, term, cwd }
+  // Düzenleme ve önizleme kopyaları pencereye özel klasörde durur; o pencerenin bağlantısı kesilince silinir.
+  const tmp = path.join(tmpRoot, String(ownId));
   const send = (channel, value) => { if (!win.isDestroyed()) win.webContents.send(channel, value); };
 
   // Terminal alttaki panelden ayrılınca bu pencerede görünür; oturum aynı kalır.
@@ -36,8 +58,11 @@ function registerIpc(win) {
   };
   const detachTerm = () => {
     if (termWin) { termWin.focus(); return; }
-    termWin = lock(new BrowserWindow({ width: 760, height: 460, minWidth: 380, minHeight: 200, backgroundColor: '#14171e', titleBarStyle: 'hiddenInset', webPreferences }));
+    termWin = lock(new BrowserWindow({ width: 760, height: 460, minWidth: 380, minHeight: 200, backgroundColor: '#14171e', titleBarStyle: 'hiddenInset', tabbingIdentifier: 'mrc-terminal', webPreferences }));
+    const termId = termWin.webContents.id;
+    contexts.set(termId, ctx); // ayrılan terminal, ana penceresinin bağlantısını kullanır
     termWin.loadFile(page('terminal.html'));
+    termWin.on('closed', () => { contexts.delete(termId); });
     termWin.on('closed', () => { termWin = null; send('term:docked', true); });
     send('term:docked', false);
   };
@@ -54,7 +79,9 @@ function registerIpc(win) {
       // Pencere bağlantı kesildiği için kapanıyor: "geri takıldı" olayı gitmesin, yeni sitede terminal kendiliğinden açılmasın.
       const w = termWin;
       termWin = null;
+      const termId = w.webContents.id;
       w.removeAllListeners('closed');
+      w.on('closed', () => contexts.delete(termId));
       w.close();
     }
     active.edits.stopAll();
@@ -62,6 +89,7 @@ function registerIpc(win) {
     active.session.close();
     active = null;
     fs.rmSync(tmp, { recursive: true, force: true });
+    if (!win.isDestroyed()) win.setTitle('MRC FTP');
   };
   // Düzenlenip sunucuya gitmemiş dosya varken bağlantı kesilirse geçici kopyalarla birlikte kaybolur:
   // önce sıradaki yüklemeler beklenir, yine de kalan varsa kullanıcıya sorulur. true = devam edilebilir.
@@ -89,12 +117,19 @@ function registerIpc(win) {
     return active;
   };
 
+  // Site listesi ortaktır: değişince öbür sekmeler listesini yeniler.
+  const tellOthers = () => { for (const other of new Set(contexts.values())) if (other !== ctx) other.sitesChanged(); };
+
   const handlers = {
     'sites:list': () => store.list(),
-    'sites:save': (input) => store.save(input),
+    'sites:save': (input) => { const saved = store.save(input); tellOthers(); return saved; },
     'sites:remove': async (id) => {
+      if ([...contexts.values()].some((other) => other !== ctx && other.siteId() === id)) {
+        throw new FtpError('LOCAL', 'Bu site başka bir sekmede bağlı. Önce o sekmeyi kapat.');
+      }
       if (active && active.siteId === id) { await leaveOrThrow(); disconnect(); }
       store.remove(id);
+      tellOthers();
     },
     'connect': async (siteId, password) => {
       await leaveOrThrow();
@@ -130,10 +165,12 @@ function registerIpc(win) {
         onState: (state) => sendTerm('term:state', state),
       }) : null;
       active = { siteId, session, queue, edits, term, cwd: '/' };
+      win.setTitle(site.name);
       return { startDir: site.startDir, terminal: sftp, favorites: site.favorites };
     },
     'sites:favorites': (id, list) => store.setFavorites(String(id), list),
-    'trust': (siteId, fingerprint) => store.trust(siteId, fingerprint),
+    'trust': (siteId, fingerprint) => { store.trust(siteId, fingerprint); tellOthers(); },
+    'window:newTab': (siteId) => { openTab(siteId ? String(siteId) : null); },
     'disconnect': async () => { await leaveOrThrow(); disconnect(); },
     'remote:list': (p) => need().session.list(p),
     'remote:mkdir': (p) => need().session.mkdir(p),
@@ -187,19 +224,26 @@ function registerIpc(win) {
     'transfers:dismiss': (id) => need().queue.dismiss(id),
   };
 
-  for (const [channel, fn] of Object.entries(handlers)) {
-    ipcMain.removeHandler(channel);
-    ipcMain.handle(channel, async (_event, ...args) => {
+  ctx.handlers = handlers;
+  ctx.input = (data) => { if (active && active.term) active.term.write(data); };
+  ctx.siteId = () => (active ? active.siteId : null);
+  ctx.sitesChanged = () => send('sites:changed');
+  contexts.set(ownId, ctx);
+  // Kanallar bir kez kaydedilir; her çağrı gönderen pencerenin bağlamında çalışır.
+  for (const channel of Object.keys(handlers)) {
+    if (channels.has(channel)) continue;
+    channels.add(channel);
+    ipcMain.handle(channel, async (event, ...args) => {
       try {
-        return { ok: true, value: await fn(...args) };
+        const target = contexts.get(event.sender.id);
+        if (!target) throw new FtpError('NET', 'Bu pencere kapanıyor.');
+        return { ok: true, value: await target.handlers[channel](...args) };
       } catch (err) {
         const known = err instanceof FtpError;
         return { ok: false, error: { code: known ? err.code : 'NET', message: known ? err.message : 'Beklenmeyen bir hata oluştu.', cert: err.cert } };
       }
     });
   }
-  ipcMain.removeAllListeners('term:input');
-  ipcMain.on('term:input', (_event, data) => { if (active && active.term) active.term.write(String(data)); });
   // Pencere kapanırken de aynı soru: yüklenmemiş düzenleme yoksa hemen kapanır.
   let leaving = false;
   win.on('close', (event) => {
@@ -211,7 +255,9 @@ function registerIpc(win) {
       win.close();
     });
   });
-  win.on('closed', disconnect);
+  win.on('closed', () => { disconnect(); contexts.delete(ownId); });
+  // Sayfanın kendi başlığı sekme adını ezmesin: başlık bağlı sitenin adıdır.
+  win.on('page-title-updated', (event) => event.preventDefault());
 }
 
-module.exports = { registerIpc };
+module.exports = { attach };

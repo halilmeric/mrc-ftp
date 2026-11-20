@@ -28,11 +28,15 @@ function initSites() {
       const cls = 'site' + (site.id === activeId ? ' on' : '') + (site.id === busyId ? ' busy' : '');
       return el('button', {
         type: 'button', class: cls, title: `${site.user}@${site.host}`,
-        onclick: () => { if (site.id !== activeId) connect(site); }, // etkin siteye tıklamak süren aktarımları düşürmesin
+        onclick: (e) => {
+          if (e.metaKey) mrc.newTab(site.id); // ⌘-tık: bu sekmeye dokunmadan yeni sekmede aç
+          else if (site.id !== activeId) connect(site); // etkin siteye tıklamak süren aktarımları düşürmesin
+        },
         oncontextmenu: (e) => {
           e.preventDefault();
           showMenu(e.clientX, e.clientY, [
             site.id === activeId && { label: 'Bağlantıyı kes', run: disconnect },
+            { label: 'Yeni sekmede aç', run: () => mrc.newTab(site.id) },
             { label: 'Düzenle', run: () => openForm(site) },
             { label: 'Sil', danger: true, run: () => { confirmId = site.id; render(); } },
           ].filter(Boolean));
@@ -211,5 +215,11 @@ function initSites() {
     connect(saved, saved.hasPassword ? undefined : password);
   });
 
-  reload();
+  mrc.sites.onChange(reload); // başka bir sekmede site eklendi, düzenlendi ya da silindi
+  // Bu sekme "yeni sekmede aç" ile açıldıysa doğrudan o siteye bağlanır.
+  const wanted = new URLSearchParams(location.search).get('site');
+  reload().then(() => {
+    const site = wanted && sites.find((s) => s.id === wanted);
+    if (site) connect(site);
+  });
 }
