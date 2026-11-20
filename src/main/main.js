@@ -16,6 +16,8 @@ function createWindow({ siteId = null, tabOf = null } = {}) {
     minHeight: 520,
     title: 'MRC FTP',
     tabbingIdentifier: TABS,
+    vibrancy: 'under-window', // Liquid Glass: pencerenin arkası sistemin bulanık malzemesi
+    visualEffectState: 'followWindow',
     webPreferences,
   }));
   mainWindows.add(win);

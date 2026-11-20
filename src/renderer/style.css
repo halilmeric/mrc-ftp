@@ -179,3 +179,36 @@ dialog label.sw input { height: auto; margin: 2px 0 0; accent-color: var(--acc);
 dialog label.sw span { display: flex; flex-direction: column; gap: 2px; }
 dialog label.sw b { font-weight: 500; }
 dialog label.sw small { font-size: 11px; color: var(--wm); }
+
+/* Liquid Glass: cam yalnızca gezinme katmanındadır (kenar çubuğu, araç düğmeleri, aktarım paneli, menü ve pencereler).
+   Pencerenin arkası sistemin bulanık malzemesidir (main.js: vibrancy); dosya listesi okunabilirlik için opak kalır. */
+:root { --glass: rgba(255, 255, 255, .5); --glass2: rgba(255, 255, 255, .72); --edge: rgba(255, 255, 255, .8); --tint: rgba(236, 238, 243, .55); --shade: rgba(20, 30, 70, .25); }
+@media (prefers-color-scheme: dark) {
+  :root { --glass: rgba(52, 58, 76, .45); --glass2: rgba(84, 92, 116, .5); --edge: rgba(255, 255, 255, .14); --tint: rgba(16, 18, 24, .6); --shade: rgba(0, 0, 0, .5); }
+}
+html { background: var(--tint); }
+body { background: none; padding: 8px; gap: 8px; }
+body.termwin { padding: 0; gap: 0; background: var(--tbg); }
+#sites, #tray { background: var(--glass); border: 1px solid var(--edge); border-radius: 18px; box-shadow: inset 0 1px 0 var(--edge), 0 8px 24px -14px var(--shade); }
+#tray { padding-top: 0; }
+.site { border-radius: 11px; }
+.site.on, .confirm { background: var(--glass2); box-shadow: inset 0 1px 0 var(--edge); }
+main { gap: 8px; }
+#topbar { height: 36px; border: 0; padding: 0 4px 0 8px; }
+.tb, .limit, .acts button, .mini { border-radius: 999px; }
+.tb, .limit { background: var(--glass2); border-color: var(--edge); box-shadow: inset 0 1px 0 var(--edge); padding: 7px 14px; }
+.limit { padding: 0 10px; }
+#notice { border: 0; border-radius: 12px; }
+#panes { background: var(--win); border: 1px solid var(--wl); border-radius: 14px; overflow: hidden; }
+.cols { background: none; }
+.r { margin: 0 6px; padding: 0 8px; border-radius: 8px; }
+#term { border: 0; border-radius: 14px; overflow: hidden; }
+#term-grip { top: 0; height: 6px; }
+#status { border: 0; height: 20px; padding: 0 8px; }
+.job { background: var(--glass2); border-color: var(--edge); border-radius: 13px; box-shadow: inset 0 1px 0 var(--edge); }
+dialog, .menu { background: color-mix(in srgb, var(--card) 74%, transparent); backdrop-filter: blur(28px) saturate(180%); border-color: var(--edge); box-shadow: inset 0 1px 0 var(--edge), 0 24px 60px -20px rgba(0, 0, 0, .5); }
+dialog { border-radius: 20px; }
+dialog input, dialog select, dialog code, .blist { border-radius: 9px; }
+.menu { border-radius: 13px; }
+.menu button { border-radius: 8px; }
+#status, .lbl, .site.add { color: color-mix(in srgb, var(--wfg) 78%, transparent); }

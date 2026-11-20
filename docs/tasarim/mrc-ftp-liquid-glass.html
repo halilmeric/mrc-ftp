@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MRC FTP — Liquid Glass taslağı</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #14171f; --mut: #4a5263; --acc: #0057d9; --onacc: #fff; --ok: #12824c;
+    --glass: rgba(255, 255, 255, .42); --glass2: rgba(255, 255, 255, .62); --edge: rgba(255, 255, 255, .75);
+    --content: rgba(255, 255, 255, .82); --line: rgba(20, 30, 60, .09); --sel: rgba(10, 108, 255, .14);
+    --shade: rgba(20, 30, 70, .28); --folder: #4f9bff;
+    --wall: radial-gradient(60% 70% at 15% 20%, #ffb36b 0, transparent 60%), radial-gradient(55% 65% at 85% 15%, #7cc4ff 0, transparent 60%), radial-gradient(70% 70% at 70% 90%, #b58cff 0, transparent 60%), #e9eef8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #eef1f8; --mut: #b4bccd; --acc: #6fb0ff; --onacc: #0b1220; --ok: #5fd69b;
+      --glass: rgba(40, 46, 62, .42); --glass2: rgba(70, 78, 100, .5); --edge: rgba(255, 255, 255, .16);
+      --content: rgba(22, 25, 34, .8); --line: rgba(255, 255, 255, .08); --sel: rgba(90, 162, 255, .22);
+      --shade: rgba(0, 0, 0, .55); --folder: #5f9cf0;
+      --wall: radial-gradient(60% 70% at 15% 20%, #b3541e 0, transparent 60%), radial-gradient(55% 65% at 85% 15%, #1f5fa8 0, transparent 60%), radial-gradient(70% 70% at 70% 90%, #5a35a8 0, transparent 60%), #0d1018;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 28px 16px; background: var(--wall); background-attachment: fixed; color: var(--fg); font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+  .note { max-width: 1040px; width: 100%; margin: 0 0 14px; color: var(--fg); font-size: 12px; }
+  /* Cam: arkadaki rengi bulanıklaştırıp doygunlaştırır, üst kenarda ışık çizgisi taşır. */
+  .glass { background: var(--glass); backdrop-filter: blur(26px) saturate(180%); -webkit-backdrop-filter: blur(26px) saturate(180%); border: 1px solid var(--edge); box-shadow: inset 0 1px 0 var(--edge), 0 10px 30px -14px var(--shade); }
+  .win { width: 100%; max-width: 1040px; height: 620px; border-radius: 26px; padding: 8px; display: flex; gap: 8px; box-shadow: inset 0 1px 0 var(--edge), 0 40px 90px -30px var(--shade); }
+  /* Kenar çubuğu pencerenin içinde yüzen ayrı bir cam katmandır. */
+  .side { width: 196px; border-radius: 20px; padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; background: var(--glass2); }
+  .lights { display: flex; gap: 8px; padding: 2px 6px 14px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+  .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .cap { font-size: 11px; font-weight: 600; color: var(--mut); padding: 4px 12px; }
+  .site { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; }
+  .site.on { background: var(--sel); font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mut); opacity: .5; }
+  .site.on .dot { background: var(--ok); opacity: 1; }
+  .grow { flex: 1; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 4px 4px 0; }
+  .tabs { display: flex; gap: 2px; padding: 3px; border-radius: 999px; }
+  .tab { padding: 8px 14px; border-radius: 999px; color: var(--mut); white-space: nowrap; }
+  .tab.on { background: var(--glass2); color: var(--fg); font-weight: 600; box-shadow: inset 0 1px 0 var(--edge); }
+  .pill { display: flex; gap: 2px; padding: 3px; border-radius: 999px; }
+  .pill button { all: unset; padding: 8px 14px; border-radius: 999px; cursor: default; white-space: nowrap; }
+  .pill button:hover { background: var(--glass2); }
+  .pill button.p { background: var(--acc); color: var(--onacc); font-weight: 600; }
+  /* İçerik cam değildir: okunabilirlik için neredeyse opak kalır, cam yalnızca gezinme katmanındadır. */
+  .body { flex: 1; min-height: 0; display: flex; gap: 8px; }
+  .panes { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; background: var(--content); border-radius: 18px; overflow: hidden; border: 1px solid var(--line); }
+  .pane + .pane { border-left: 1px solid var(--line); }
+  .crumb { padding: 12px 14px 8px; color: var(--mut); } .crumb b { color: var(--fg); }
+  .row { display: flex; align-items: center; gap: 9px; padding: 7px 14px; margin: 0 6px; border-radius: 9px; }
+  .row.sel { background: var(--sel); }
+  .row span:last-child { margin-left: auto; color: var(--mut); font-variant-numeric: tabular-nums; }
+  .ic { width: 16px; height: 13px; border-radius: 3px; background: var(--folder); flex: none; }
+  .ic.f { width: 12px; height: 15px; background: none; border: 1.5px solid var(--mut); border-radius: 2px; margin: 0 2px; }
+  .tray { width: 214px; border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .job { background: var(--glass2); border-radius: 12px; padding: 12px; box-shadow: inset 0 1px 0 var(--edge); }
+  .job small { color: var(--mut); display: block; margin-top: 2px; }
+  .track { height: 5px; border-radius: 99px; background: var(--line); margin-top: 7px; overflow: hidden; }
+  .track i { display: block; height: 100%; border-radius: 99px; background: var(--acc); }
+  @media (max-width: 760px) { .win { height: auto; flex-direction: column; } .side { width: auto; } .body { flex-direction: column; } .tray { width: auto; } .panes { grid-template-columns: 1fr; } .pane + .pane { border-left: 0; border-top: 1px solid var(--line); } .bar { flex-wrap: wrap; } }
+
+  /* Karşılaştırma: uygulamanın bugünkü ("Sakin") görünümü, aynı içerikle. */
+  h2.lbl { max-width: 1040px; width: 100%; margin: 26px 0 10px; font-size: 13px; font-weight: 600; }
+  .cur { --content: #fbfbfd; --side: #eceef3; --line: #dfe2e9; --glass2: #fff; --sel: #e3ecff; --acc: #2458e6; --onacc: #fff; --mut: #5f6779;
+    background: var(--content); padding: 0; gap: 0; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  @media (prefers-color-scheme: dark) { .cur { --content: #1a1d25; --side: #14171e; --line: #2a2f3b; --glass2: #21252f; --sel: #24304f; --acc: #7ea2ff; --onacc: #0b1220; --mut: #9aa2b4; } }
+  .cur .glass { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; border: 0; box-shadow: none; }
+  .cur .side { background: var(--side); border-radius: 0; border-right: 1px solid var(--line); }
+  .cur .site { border-radius: 7px; }
+  .cur .main, .cur .body { gap: 0; }
+  .cur .bar { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .cur .tabs { padding: 0; gap: 0; border-radius: 0; } .cur .tab { border-radius: 0; box-shadow: none; } .cur .tab.on { background: none; border-bottom: 2px solid var(--acc); }
+  .cur .pill { gap: 8px; padding: 0; } .cur .pill button { border: 1px solid var(--line); border-radius: 7px; background: var(--glass2); } .cur .pill button.p { background: var(--acc); border-color: var(--acc); }
+  .cur .panes { border-radius: 0; border: 0; }
+  .cur .row { margin: 0; border-radius: 0; }
+  .cur .tray { border-radius: 0; border-left: 1px solid var(--line); }
+  .cur .job { border: 1px solid var(--line); border-radius: 8px; box-shadow: none; }
+</style>
+</head>
+<body>
+<p class="note"><b>MRC FTP — Liquid Glass taslağı.</b> Cam yalnızca gezinme katmanında (kenar çubuğu, sekmeler, araç düğmeleri, aktarım paneli); dosya listesi okunabilir kalsın diye opak. Bu bir görsel taslaktır, uygulamanın kendisi değil.</p>
+<h2 class="lbl" style="margin-top:0">Liquid Glass</h2>
+<div class="win glass">
+  <aside class="side glass">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="cap">SİTELER</div>
+    <div class="site on"><span class="dot"></span>ornek.com</div>
+    <div class="site"><span class="dot"></span>magaza.com.tr</div>
+    <div class="site"><span class="dot"></span>blog (SFTP)</div>
+    <span class="grow"></span>
+    <div class="site" style="color:var(--mut)">+ Yeni site</div>
+  </aside>
+  <div class="main">
+    <div class="bar">
+      <div class="tabs glass"><span class="tab on">ornek.com</span><span class="tab">blog</span><span class="tab">+</span></div>
+      <span class="grow"></span>
+      <div class="pill glass"><button>Sık kullanılanlar</button><button>Terminal</button><button>Yeni klasör</button><button class="p">Yenile</button></div>
+    </div>
+    <div class="body">
+      <div class="panes">
+        <section class="pane">
+          <div class="crumb">Mac › Belgeler › <b>site</b></div>
+          <div class="row"><i class="ic"></i>görseller<span>klasör</span></div>
+          <div class="row sel"><i class="ic f"></i>index.html<span>4 KB</span></div>
+          <div class="row"><i class="ic f"></i>stil.css<span>12 KB</span></div>
+          <div class="row"><i class="ic f"></i>uygulama.js<span>48 KB</span></div>
+          <div class="row"><i class="ic f"></i>yedek.zip<span>24 MB</span></div>
+        </section>
+        <section class="pane">
+          <div class="crumb">Sunucu › <b>public_html</b></div>
+          <div class="row"><i class="ic"></i>cgi-bin<span>klasör</span></div>
+          <div class="row"><i class="ic"></i>görseller<span>klasör</span></div>
+          <div class="row"><i class="ic f"></i>.htaccess<span>1 KB</span></div>
+          <div class="row"><i class="ic f"></i>index.html<span>4 KB</span></div>
+          <div class="row"><i class="ic f"></i>stil.css<span>11 KB</span></div>
+        </section>
+      </div>
+      <aside class="tray glass">
+        <b>Aktarımlar</b>
+        <div class="job">yedek.zip<small>14,2 / 24 MB · 1,1 MB/sn</small><div class="track"><i style="width:59%"></i></div></div>
+        <div class="job">uygulama.js<small>Sırada</small><div class="track"><i style="width:0"></i></div></div>
+        <div class="job">stil.css<small style="color:var(--ok)">Tamamlandı</small><div class="track"><i style="width:100%;background:var(--ok)"></i></div></div>
+      </aside>
+    </div>
+  </div>
+</div>
+<h2 class="lbl">Bugünkü görünüm (karşılaştırma için)</h2>
+<div class="win glass cur">
+  <aside class="side glass">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="cap">SİTELER</div>
+    <div class="site on"><span class="dot"></span>ornek.com</div>
+    <div class="site"><span class="dot"></span>magaza.com.tr</div>
+    <div class="site"><span class="dot"></span>blog (SFTP)</div>
+    <span class="grow"></span>
+    <div class="site" style="color:var(--mut)">+ Yeni site</div>
+  </aside>
+  <div class="main">
+    <div class="bar">
+      <div class="tabs glass"><span class="tab on">ornek.com</span><span class="tab">blog</span><span class="tab">+</span></div>
+      <span class="grow"></span>
+      <div class="pill glass"><button>Sık kullanılanlar</button><button>Terminal</button><button>Yeni klasör</button><button class="p">Yenile</button></div>
+    </div>
+    <div class="body">
+      <div class="panes">
+        <section class="pane">
+          <div class="crumb">Mac › Belgeler › <b>site</b></div>
+          <div class="row"><i class="ic"></i>görseller<span>klasör</span></div>
+          <div class="row sel"><i class="ic f"></i>index.html<span>4 KB</span></div>
+          <div class="row"><i class="ic f"></i>stil.css<span>12 KB</span></div>
+          <div class="row"><i class="ic f"></i>uygulama.js<span>48 KB</span></div>
+          <div class="row"><i class="ic f"></i>yedek.zip<span>24 MB</span></div>
+        </section>
+        <section class="pane">
+          <div class="crumb">Sunucu › <b>public_html</b></div>
+          <div class="row"><i class="ic"></i>cgi-bin<span>klasör</span></div>
+          <div class="row"><i class="ic"></i>görseller<span>klasör</span></div>
+          <div class="row"><i class="ic f"></i>.htaccess<span>1 KB</span></div>
+          <div class="row"><i class="ic f"></i>index.html<span>4 KB</span></div>
+          <div class="row"><i class="ic f"></i>stil.css<span>11 KB</span></div>
+        </section>
+      </div>
+      <aside class="tray glass">
+        <b>Aktarımlar</b>
+        <div class="job">yedek.zip<small>14,2 / 24 MB · 1,1 MB/sn</small><div class="track"><i style="width:59%"></i></div></div>
+        <div class="job">uygulama.js<small>Sırada</small><div class="track"><i style="width:0"></i></div></div>
+        <div class="job">stil.css<small style="color:var(--ok)">Tamamlandı</small><div class="track"><i style="width:100%;background:var(--ok)"></i></div></div>
+      </aside>
+    </div>
+  </div>
+</div>
+</body>
+</html>
