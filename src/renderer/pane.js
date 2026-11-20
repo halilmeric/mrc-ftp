@@ -62,7 +62,7 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
   }
 
   function rowFor(entry, index, all) {
-    const icon = el('i', { class: entry.isDir ? 'ic' : 'ic f' });
+    const icon = el('i', { class: entry.isDir ? 'ic' : 'ic f ' + fileKind(entry.name) });
     if (state.confirming === entry.name) {
       return el('div', { class: 'r ask' },
         el('span', {}, t`${entry.name} silinsin mi?${entry.isDir ? t(' İçindekilerle birlikte silinir.') : ''}`),
@@ -147,7 +147,7 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
       })), el('span', { class: 'm' }), el('span', { class: 'm' })));
     }
     all.forEach((entry, i) => out.push(rowFor(entry, i, all)));
-    ghostNode = state.ghost ? el('div', { class: 'r ghost' }, el('div', { class: 'n' }, el('i', { class: 'ic f' }), el('span', {}, t`${state.ghost.name} yükleniyor`)), progressBar(state.ghost.pct)) : null;
+    ghostNode = state.ghost ? el('div', { class: 'r ghost' }, el('div', { class: 'n' }, el('i', { class: 'ic f ' + fileKind(state.ghost.name) }), el('span', {}, t`${state.ghost.name} yükleniyor`)), progressBar(state.ghost.pct)) : null;
     if (ghostNode) out.push(ghostNode);
     if (out.length === 0) out.push(el('div', { class: 'empty' }, t('Bu klasör boş')));
     rows.replaceChildren(...out);

@@ -72,4 +72,18 @@ function features(raw) {
   return Object.fromEntries(FEATURE_KEYS.map((k) => [k, !off.includes(k)]));
 }
 
-if (typeof module !== 'undefined') module.exports = { formatSize, formatDate, formatEta, modeToText, textToMode, batchNames, features };
+// Dosya simgesinin rengi türe göre seçilir; tanınmayan uzantı düz "file" kalır.
+const KINDS = {
+  code: 'html htm css js mjs cjs ts jsx tsx php py rb go rs java c h cpp json xml yml yaml toml sh bat sql vue svelte',
+  image: 'png jpg jpeg gif svg webp ico avif bmp tiff heic psd',
+  archive: 'zip tar gz tgz bz2 xz rar 7z dmg iso',
+  doc: 'md txt pdf doc docx rtf odt log csv xls xlsx ppt pptx',
+  media: 'mp3 wav ogg flac m4a mp4 mov mkv avi webm',
+};
+const KIND_OF = Object.fromEntries(Object.entries(KINDS).flatMap(([kind, list]) => list.split(' ').map((ext) => [ext, kind])));
+function fileKind(name) {
+  const dot = name.lastIndexOf('.');
+  return (dot > 0 && KIND_OF[name.slice(dot + 1).toLowerCase()]) || 'file';
+}
+
+if (typeof module !== 'undefined') module.exports = { fileKind, formatSize, formatDate, formatEta, modeToText, textToMode, batchNames, features };

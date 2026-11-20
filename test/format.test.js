@@ -73,3 +73,16 @@ test('features: kapalı listesinde olmayan her özellik açıktır', () => {
   assert.deepStrictEqual(features('["terminal","yok",7]'), { ...all, terminal: false });
   assert.deepStrictEqual(features('["edit","batch"]'), { ...all, edit: false, batch: false });
 });
+
+test('fileKind: uzantıya göre simge türü', () => {
+  const { fileKind } = require('../src/renderer/format');
+  assert.strictEqual(fileKind('index.HTML'), 'code');
+  assert.strictEqual(fileKind('next.config.ts'), 'code');
+  assert.strictEqual(fileKind('foto.jpeg'), 'image');
+  assert.strictEqual(fileKind('yedek.tar.gz'), 'archive');
+  assert.strictEqual(fileKind('README.md'), 'doc');
+  assert.strictEqual(fileKind('film.mp4'), 'media');
+  assert.strictEqual(fileKind('kur.exe'), 'file');
+  assert.strictEqual(fileKind('Makefile'), 'file');
+  assert.strictEqual(fileKind('.htaccess'), 'file'); // noktayla başlayan adın uzantısı yoktur
+});

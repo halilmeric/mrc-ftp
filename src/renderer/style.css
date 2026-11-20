@@ -214,3 +214,10 @@ dialog input, dialog select, dialog code, .blist { border-radius: 9px; }
 #status, .lbl, .site.add { color: color-mix(in srgb, var(--wfg) 78%, transparent); }
 dialog label.langrow { flex-direction: row; align-items: center; justify-content: space-between; font-size: 13px; color: var(--wfg); margin-bottom: 4px; }
 dialog label.langrow select { width: 160px; }
+
+/* Dosya simgeleri: köşesi kıvrık dolu sayfa, rengi türe göre. Klasör daha dolgun. */
+.ic { width: 17px; height: 13px; border-radius: 3px; background: linear-gradient(var(--folder), color-mix(in srgb, var(--folder) 78%, #000)); }
+.ic::before { width: 8px; background: var(--folder); }
+.ic.f { --k: #8b93a7; width: 13px; height: 16px; border: 0; border-radius: 2.5px; margin: 0 2px; background: var(--k); clip-path: polygon(0 0, 62% 0, 100% 31%, 100% 100%, 0 100%); }
+.ic.f::before { display: block; left: auto; right: 0; top: 0; width: 5px; height: 5px; border-radius: 0 0 0 2px; background: rgba(255, 255, 255, .5); }
+.ic.f.code { --k: #4f8df0; } .ic.f.image { --k: #2fae7b; } .ic.f.archive { --k: #e09a2f; } .ic.f.doc { --k: #7f8aa3; } .ic.f.media { --k: #b667d6; }
