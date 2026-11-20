@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const { t } = require('../i18n');
 const os = require('node:os');
 const path = require('node:path');
 const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
@@ -9,6 +10,7 @@ const { createTerminal } = require('./terminal');
 const { webPreferences, page, lock } = require('./window');
 const { createQueue } = require('./transfers');
 const localfs = require('./localfs');
+const prefs = require('./prefs');
 const { createEdits } = require('./edits');
 const { createLimiter } = require('./throttle');
 
@@ -71,7 +73,7 @@ function attach(win, { openTab }) {
   };
   const termOf = () => {
     const a = need();
-    if (!a.term) throw new FtpError('LOCAL', 'Terminal yalnızca SFTP sitelerinde kullanılabilir.');
+    if (!a.term) throw new FtpError('LOCAL', t('Terminal yalnızca SFTP sitelerinde kullanılabilir.'));
     return a.term;
   };
 
@@ -104,9 +106,9 @@ function attach(win, { openTab }) {
     win.show(); // soru arka plandaki bir sekmede görünmez kalmasın
     const res = await dialog.showMessageBox(win, {
       type: 'warning',
-      message: 'Yüklenmemiş düzenlemeler var',
-      detail: `${left} dosyadaki son değişiklik sunucuya gitmedi. Devam edersen bu değişiklikler kaybolur.`,
-      buttons: ['Vazgeç', 'Yine de devam et'],
+      message: t('Yüklenmemiş düzenlemeler var'),
+      detail: t`${left} dosyadaki son değişiklik sunucuya gitmedi. Devam edersen bu değişiklikler kaybolur.`,
+      buttons: [t('Vazgeç'), t('Yine de devam et')],
       defaultId: 0,
       cancelId: 0,
     });
@@ -117,7 +119,7 @@ function attach(win, { openTab }) {
   };
 
   const need = () => {
-    if (!active) throw new FtpError('NET', 'Önce bir siteye bağlan.');
+    if (!active) throw new FtpError('NET', t('Önce bir siteye bağlan.'));
     return active;
   };
 
@@ -129,7 +131,7 @@ function attach(win, { openTab }) {
     'sites:save': (input) => { const saved = store.save(input); tellOthers(); return saved; },
     'sites:remove': async (id) => {
       if ([...contexts.values()].some((other) => other !== ctx && other.siteId() === id)) {
-        throw new FtpError('LOCAL', 'Bu site başka bir sekmede bağlı. Önce o sekmeyi kapat.');
+        throw new FtpError('LOCAL', t('Bu site başka bir sekmede bağlı. Önce o sekmeyi kapat.'));
       }
       if (active && active.siteId === id) { await leaveOrThrow(); disconnect(); }
       store.remove(id);
@@ -138,11 +140,11 @@ function attach(win, { openTab }) {
     'connect': async (siteId, password) => {
       await leaveOrThrow();
       const site = store.get(siteId);
-      if (!site) throw new FtpError('NET', 'Site bulunamadı.');
+      if (!site) throw new FtpError('NET', t('Site bulunamadı.'));
       const pass = password || site.password;
       const sftp = site.protocol === 'sftp';
       const byKey = sftp && site.auth === 'key';
-      if (!pass && !byKey) throw new FtpError('NEED_PASSWORD', 'Şifre gerekli.'); // parolasız anahtar şifre istemez
+      if (!pass && !byKey) throw new FtpError('NEED_PASSWORD', t('Şifre gerekli.')); // parolasız anahtar şifre istemez
       const cfg = { host: site.host, port: site.port, user: site.user, fingerprint: site.fingerprint,
         ...(byKey ? { keyPath: site.keyPath, passphrase: pass } : { password: pass }), secure: site.secure };
       const open = sftp ? openSftpSession : openSession;
@@ -168,7 +170,7 @@ function attach(win, { openTab }) {
         getSession: async () => session,
         enqueue: (spec) => queue.add(spec),
         open: async (file) => {
-          if (await shell.openPath(file)) throw new FtpError('LOCAL', 'Bu dosyayı açacak bir uygulama bulunamadı.');
+          if (await shell.openPath(file)) throw new FtpError('LOCAL', t('Bu dosyayı açacak bir uygulama bulunamadı.'));
         },
         onChange: (count) => send('edits:change', count),
       });
@@ -184,6 +186,8 @@ function attach(win, { openTab }) {
     'sites:favorites': (id) => { const site = store.get(String(id)); return site ? site.favorites : []; },
     'sites:favorite': (id, dir, on) => store.toggleFavorite(String(id), String(dir), Boolean(on)),
     'trust': (siteId, fingerprint) => { store.trust(siteId, fingerprint); tellOthers(); },
+    'lang:set': (value) => { prefs.setLang(value); },
+    'app:relaunch': () => { app.relaunch(); app.quit(); },
     'window:newTab': (siteId) => { openTab(siteId ? String(siteId) : null); },
     'disconnect': async () => { await leaveOrThrow(); disconnect(); },
     'remote:list': (p) => need().session.list(p),
@@ -191,20 +195,20 @@ function attach(win, { openTab }) {
     'remote:rename': (from, to) => need().session.rename(from, to),
     'remote:remove': (p, isDir) => need().session.remove(p, isDir),
     'remote:chmod': (p, mode) => {
-      if (!Number.isInteger(mode) || mode < 0 || mode > 0o777) throw new FtpError('LOCAL', 'Geçersiz izin.');
+      if (!Number.isInteger(mode) || mode < 0 || mode > 0o777) throw new FtpError('LOCAL', t('Geçersiz izin.'));
       return need().session.chmod(p, mode);
     },
     'local:home': () => localfs.home(),
     'local:list': (p) => localfs.list(p),
     'local:downloads': () => ({ path: app.getPath('downloads') }),
     'local:pickDir': async () => {
-      const res = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], buttonLabel: 'Buraya indir' });
+      const res = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], buttonLabel: t('Buraya indir') });
       return res.canceled ? null : { path: res.filePaths[0] };
     },
     'local:pickKey': async () => {
       const res = await dialog.showOpenDialog(win, {
         defaultPath: path.join(os.homedir(), '.ssh'), properties: ['openFile', 'showHiddenFiles'],
-        buttonLabel: 'Anahtarı seç', message: 'SSH özel anahtar dosyasını seç (.pub olmayan)',
+        buttonLabel: t('Anahtarı seç'), message: t('SSH özel anahtar dosyasını seç (.pub olmayan)'),
       });
       return res.canceled ? null : { path: res.filePaths[0] };
     },
@@ -213,8 +217,8 @@ function attach(win, { openTab }) {
     'preview:local': (file) => { win.previewFile(String(file)); },
     'preview:remote': async (remotePath, size) => {
       const name = path.posix.basename(String(remotePath));
-      if (String(remotePath).split('/').includes('..') || !name || /[\\/]/.test(name)) throw new FtpError('LOCAL', 'Bu dosya önizlenemiyor.');
-      if (Number(size) > MAX_PREVIEW) throw new FtpError('LOCAL', 'Önizlemek için çok büyük.');
+      if (String(remotePath).split('/').includes('..') || !name || /[\\/]/.test(name)) throw new FtpError('LOCAL', t('Bu dosya önizlenemiyor.'));
+      if (Number(size) > MAX_PREVIEW) throw new FtpError('LOCAL', t('Önizlemek için çok büyük.'));
       const file = path.join(tmp, 'preview', name);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       await need().session.fetch(String(remotePath), file);
@@ -254,11 +258,11 @@ function attach(win, { openTab }) {
     ipcMain.handle(channel, async (event, ...args) => {
       try {
         const target = contexts.get(event.sender.id);
-        if (!target) throw new FtpError('NET', 'Bu pencere kapanıyor.');
+        if (!target) throw new FtpError('NET', t('Bu pencere kapanıyor.'));
         return { ok: true, value: await target.handlers[channel](...args) };
       } catch (err) {
         const known = err instanceof FtpError;
-        return { ok: false, error: { code: known ? err.code : 'NET', message: known ? err.message : 'Beklenmeyen bir hata oluştu.', cert: err.cert } };
+        return { ok: false, error: { code: known ? err.code : 'NET', message: known ? err.message : t('Beklenmeyen bir hata oluştu.'), cert: err.cert } };
       }
     });
   }

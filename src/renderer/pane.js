@@ -32,7 +32,7 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
   const picked = () => state.entries.filter((e) => state.selected.has(e.name));
 
   function nameInput(value, onDone) {
-    const input = el('input', { value, spellcheck: 'false', 'aria-label': 'Ad' });
+    const input = el('input', { value, spellcheck: 'false', 'aria-label': t('Ad') });
     let done = false;
     const finish = (commit) => {
       if (done) return;
@@ -55,7 +55,7 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
     try {
       await fn();
     } catch (err) {
-      state.error = err.message || 'İşlem yapılamadı.';
+      state.error = err.message || t('İşlem yapılamadı.');
     }
     rows.focus();
     await refresh();
@@ -65,15 +65,15 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
     const icon = el('i', { class: entry.isDir ? 'ic' : 'ic f' });
     if (state.confirming === entry.name) {
       return el('div', { class: 'r ask' },
-        el('span', {}, `${entry.name} silinsin mi?${entry.isDir ? ' İçindekilerle birlikte silinir.' : ''}`),
+        el('span', {}, t`${entry.name} silinsin mi?${entry.isDir ? t(' İçindekilerle birlikte silinir.') : ''}`),
         el('div', { class: 'acts' },
-          el('button', { type: 'button', class: 'd', onclick: () => { state.confirming = null; act(() => ops.remove(joinPath(state.path, entry.name), entry.isDir)); } }, 'Sil'),
-          el('button', { type: 'button', onclick: () => { state.confirming = null; settle(); } }, 'Vazgeç')));
+          el('button', { type: 'button', class: 'd', onclick: () => { state.confirming = null; act(() => ops.remove(joinPath(state.path, entry.name), entry.isDir)); } }, t('Sil')),
+          el('button', { type: 'button', onclick: () => { state.confirming = null; settle(); } }, t('Vazgeç'))));
     }
     if (state.renaming === entry.name) {
       return el('div', { class: 'r sel' }, el('div', { class: 'n' }, icon, nameInput(entry.name, (name) => {
         state.renaming = null;
-        if (name && taken(name)) { state.error = 'Bu adda bir öğe zaten var.'; settle(); } // RNTO sunucuda sessizce üzerine yazar
+        if (name && taken(name)) { state.error = t('Bu adda bir öğe zaten var.'); settle(); } // RNTO sunucuda sessizce üzerine yazar
         else if (name) act(() => ops.rename(joinPath(state.path, entry.name), joinPath(state.path, name)));
         else settle();
       })), el('span', { class: 'm' }), el('span', { class: 'm' }));
@@ -109,7 +109,7 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
         showMenu(e.clientX, e.clientY, menu(entry, picked()));
       },
     }, el('div', { class: 'n' }, icon, el('span', {}, entry.name)),
-    el('span', { class: 'm' }, entry.isDir ? 'klasör' : formatSize(entry.size)),
+    el('span', { class: 'm' }, entry.isDir ? t('klasör') : formatSize(entry.size)),
     el('span', { class: 'm' }, formatDate(entry.modified)));
   }
 
@@ -126,14 +126,14 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
       state.sort = { key, dir: state.sort.key === key ? -state.sort.dir : 1 };
       render();
     } }, text + (state.sort.key === key ? (state.sort.dir === 1 ? ' ↑' : ' ↓') : ''));
-    cols.replaceChildren(head('name', 'Ad'), head('size', 'Boyut'), head('modified', 'Değişti'));
+    cols.replaceChildren(head('name', t('Ad')), head('size', t('Boyut')), head('modified', t('Değişti')));
 
     errBox.hidden = !state.error;
     errBox.textContent = state.error;
     rows.classList.toggle('loading', state.loading);
 
     if (state.path == null) {
-      rows.replaceChildren(el('div', { class: 'empty' }, 'Bir site seç'));
+      rows.replaceChildren(el('div', { class: 'empty' }, t('Bir site seç')));
       return;
     }
     const all = sorted();
@@ -141,15 +141,15 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
     if (state.creating) {
       out.push(el('div', { class: 'r sel' }, el('div', { class: 'n' }, el('i', { class: 'ic' }), nameInput('', (name) => {
         state.creating = false;
-        if (name && taken(name)) { state.error = 'Bu adda bir öğe zaten var.'; settle(); }
+        if (name && taken(name)) { state.error = t('Bu adda bir öğe zaten var.'); settle(); }
         else if (name) act(() => ops.mkdir(joinPath(state.path, name)));
         else settle();
       })), el('span', { class: 'm' }), el('span', { class: 'm' })));
     }
     all.forEach((entry, i) => out.push(rowFor(entry, i, all)));
-    ghostNode = state.ghost ? el('div', { class: 'r ghost' }, el('div', { class: 'n' }, el('i', { class: 'ic f' }), el('span', {}, `${state.ghost.name} yükleniyor`)), progressBar(state.ghost.pct)) : null;
+    ghostNode = state.ghost ? el('div', { class: 'r ghost' }, el('div', { class: 'n' }, el('i', { class: 'ic f' }), el('span', {}, t`${state.ghost.name} yükleniyor`)), progressBar(state.ghost.pct)) : null;
     if (ghostNode) out.push(ghostNode);
-    if (out.length === 0) out.push(el('div', { class: 'empty' }, 'Bu klasör boş'));
+    if (out.length === 0) out.push(el('div', { class: 'empty' }, t('Bu klasör boş')));
     rows.replaceChildren(...out);
   }
 
@@ -160,7 +160,7 @@ function createPane({ root, kind, label, list, ops, menu, onSend, onDropIn, onLo
       const entries = await list(path);
       Object.assign(state, { path, entries, selected: new Set(), anchor: null, renaming: null, confirming: null, creating: false, error: '', stale: false });
     } catch (err) {
-      state.error = err.message || 'Klasör açılamadı.';
+      state.error = err.message || t('Klasör açılamadı.');
     }
     state.loading = false;
     render();

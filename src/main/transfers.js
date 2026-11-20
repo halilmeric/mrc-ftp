@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const { t } = require('../i18n');
 const path = require('node:path');
 
 const PART = '.mrcftp-part';
@@ -65,9 +66,9 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
 
   const describe = (err) => {
     if (err && ['FTP', 'AUTH', 'CERT'].includes(err.code)) return err.message;
-    if (err && typeof err.code === 'number') return 'Sunucu işlemi reddetti: ' + String(err.message).replace(/^\d+[ -]/, '');
-    if (err && err.syscall && err.path) return 'Mac\'teki dosya okunamadı ya da yazılamadı.'; // soket hataları da syscall taşır, path taşımaz
-    return 'Bağlantı koptu, dosya aktarılmadı.';
+    if (err && typeof err.code === 'number') return t('Sunucu işlemi reddetti: ') + String(err.message).replace(/^\d+[ -]/, '');
+    if (err && err.syscall && err.path) return t('Mac\'teki dosya okunamadı ya da yazılamadı.'); // soket hataları da syscall taşır, path taşımaz
+    return t('Bağlantı koptu, dosya aktarılmadı.');
   };
 
   const mkdirRemote = async (dir) => {
@@ -244,7 +245,7 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
         const now = job.decision === 'overwrite' ? null : await remoteEntry(job);
         if (now && (now.size !== job.baseline.size || now.modified !== job.baseline.modified)) {
           stopIfCancelled();
-          job.note = 'Dosya sen düzenlerken sunucuda değişmiş';
+          job.note = t('Dosya sen düzenlerken sunucuda değişmiş');
           job.state = 'asking';
           return;
         }
@@ -310,7 +311,7 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
         } else if (!job.restarted) {
           Object.assign(job, { restarted: true, state: 'queued', bytes: 0 });
         } else {
-          Object.assign(job, { state: 'error', error: 'Dosya yüklenirken değişti. Yeniden dene.' });
+          Object.assign(job, { state: 'error', error: t('Dosya yüklenirken değişti. Yeniden dene.') });
         }
         return;
       }
@@ -328,7 +329,7 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
         dropPart(job);
       } else {
         job.state = 'error';
-        job.error = job.keepPart ? `Dosya yüklendi ama yerine taşınamadı; sunucuda ${job.name}${PART} adıyla duruyor.` : describe(err);
+        job.error = job.keepPart ? t`Dosya yüklendi ama yerine taşınamadı; sunucuda ${job.name}${PART} adıyla duruyor.` : describe(err);
         if (noRetry) {
           for (const other of jobs) if (other.state === 'queued' && !other.claimed) Object.assign(other, { state: 'error', error: job.error });
         }
@@ -405,7 +406,7 @@ function createQueue({ openSession, onChange, onUploaded, parallel = 3 }) {
         push(direction, localPath, remotePath, 0);
         const job = jobs[jobs.length - 1];
         job.state = 'error';
-        job.error = err && err.syscall && err.path ? 'Klasör okunamadı.' : describe(err);
+        job.error = err && err.syscall && err.path ? t('Klasör okunamadı.') : describe(err);
       }
       emitNow();
       pump();

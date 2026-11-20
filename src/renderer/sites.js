@@ -9,21 +9,21 @@ function initSites() {
   let confirmId = null;
 
   const CERT_TEXT = {
-    mismatch: (c) => `Sertifika başka bir ada ait: ${c.subject}`,
-    'self-signed': () => 'Sertifikayı sunucu kendi imzalamış.',
-    untrusted: (c) => `Sertifikayı tanınmayan bir kurum vermiş: ${c.issuer}`,
-    expired: (c) => `Sertifikanın süresi ${c.validTo} tarihinde dolmuş.`,
-    changed: () => 'Sertifika son bağlantıdan bu yana değişmiş.',
-    'ssh-new': () => 'Bu sunucuya ilk kez bağlanıyorsun. Parmak izini hosting panelinde gösterilen SSH anahtar parmak iziyle karşılaştırabilirsin.',
-    'ssh-changed': () => 'Sunucunun anahtarı son bağlantıdan bu yana değişmiş. Sunucu taşınmadıysa ya da yeniden kurulmadıysa bağlanma.',
+    mismatch: (c) => t`Sertifika başka bir ada ait: ${c.subject}`,
+    'self-signed': () => t('Sertifikayı sunucu kendi imzalamış.'),
+    untrusted: (c) => t`Sertifikayı tanınmayan bir kurum vermiş: ${c.issuer}`,
+    expired: (c) => t`Sertifikanın süresi ${c.validTo} tarihinde dolmuş.`,
+    changed: () => t('Sertifika son bağlantıdan bu yana değişmiş.'),
+    'ssh-new': () => t('Bu sunucuya ilk kez bağlanıyorsun. Parmak izini hosting panelinde gösterilen SSH anahtar parmak iziyle karşılaştırabilirsin.'),
+    'ssh-changed': () => t('Sunucunun anahtarı son bağlantıdan bu yana değişmiş. Sunucu taşınmadıysa ya da yeniden kurulmadıysa bağlanma.'),
   };
 
   function render() {
     listEl.replaceChildren(...sites.map((site) => {
       if (site.id === confirmId) {
-        return el('div', { class: 'confirm' }, 'Silinsin mi?', el('div', { class: 'acts' },
-          el('button', { type: 'button', class: 'd', onclick: () => remove(site) }, 'Evet'),
-          el('button', { type: 'button', onclick: () => { confirmId = null; render(); } }, 'Vazgeç')));
+        return el('div', { class: 'confirm' }, t('Silinsin mi?'), el('div', { class: 'acts' },
+          el('button', { type: 'button', class: 'd', onclick: () => remove(site) }, t('Evet')),
+          el('button', { type: 'button', onclick: () => { confirmId = null; render(); } }, t('Vazgeç'))));
       }
       const cls = 'site' + (site.id === activeId ? ' on' : '') + (site.id === busyId ? ' busy' : '');
       return el('button', {
@@ -35,10 +35,10 @@ function initSites() {
         oncontextmenu: (e) => {
           e.preventDefault();
           showMenu(e.clientX, e.clientY, [
-            site.id === activeId && { label: 'Bağlantıyı kes', run: disconnect },
-            { label: 'Yeni sekmede aç', run: () => mrc.newTab(site.id) },
-            { label: 'Düzenle', run: () => openForm(site) },
-            { label: 'Sil', danger: true, run: () => { confirmId = site.id; render(); } },
+            site.id === activeId && { label: t('Bağlantıyı kes'), run: disconnect },
+            { label: t('Yeni sekmede aç'), run: () => mrc.newTab(site.id) },
+            { label: t('Düzenle'), run: () => openForm(site) },
+            { label: t('Sil'), danger: true, run: () => { confirmId = site.id; render(); } },
           ].filter(Boolean));
         },
       }, el('span', { class: 'led' }), el('span', { class: 'n' }, site.name));
@@ -104,10 +104,10 @@ function initSites() {
     pendingTrust = { site, cert, password };
     $('cert-reason').textContent = (CERT_TEXT[cert.reason] || CERT_TEXT.untrusted)(cert);
     const ssh = String(cert.reason).startsWith('ssh');
-    $('cert-title').textContent = cert.reason === 'ssh-new' ? 'Bu sunucuyu ilk kez görüyoruz' : ssh ? 'Sunucunun anahtarı değişmiş' : 'Bu sunucunun kimliği doğrulanamadı';
+    $('cert-title').textContent = cert.reason === 'ssh-new' ? t('Bu sunucuyu ilk kez görüyoruz') : ssh ? t('Sunucunun anahtarı değişmiş') : t('Bu sunucunun kimliği doğrulanamadı');
     $('cert-who').hidden = ssh;
     $('cert-hint').hidden = ssh;
-    $('cert-who').textContent = `Sertifika sahibi: ${cert.subject || 'bilinmiyor'} · Veren: ${cert.issuer || 'bilinmiyor'}`;
+    $('cert-who').textContent = t`Sertifika sahibi: ${cert.subject || t('bilinmiyor')} · Veren: ${cert.issuer || t('bilinmiyor')}`;
     $('cert-fp').textContent = cert.fingerprint;
     $('dlg-cert').showModal();
   }
@@ -125,8 +125,8 @@ function initSites() {
   function askPassword(site) {
     pendingPass = site;
     const key = site.auth === 'key';
-    $('pass-title').textContent = `${site.name} için ${key ? 'anahtar parolası' : 'şifre'}`;
-    $('p-pass-label').textContent = key ? 'Anahtar parolası' : 'Şifre';
+    $('pass-title').textContent = t`${site.name} için ${key ? t('anahtar parolası') : t('şifre')}`;
+    $('p-pass-label').textContent = key ? t('Anahtar parolası') : t('Şifre');
     $('p-pass').value = '';
     $('dlg-pass').showModal();
   }
@@ -149,18 +149,18 @@ function initSites() {
     $('f-plain-warn').hidden = $('f-secure').value !== '0';
     $('f-auth-row').hidden = !isSsh();
     $('f-key-row').hidden = !byKey();
-    $('f-key').textContent = keyPath || 'Seçilmedi';
+    $('f-key').textContent = keyPath || t('Seçilmedi');
     $('f-key').title = keyPath;
-    $('f-pass-label').textContent = byKey() ? 'Anahtar parolası (yoksa boş bırak)' : 'Şifre';
+    $('f-pass-label').textContent = byKey() ? t('Anahtar parolası (yoksa boş bırak)') : t('Şifre');
   }
   function openForm(site) {
     editing = site || null;
-    $('site-form-title').textContent = site ? 'Siteyi düzenle' : 'Yeni site';
+    $('site-form-title').textContent = site ? t('Siteyi düzenle') : t('Yeni site');
     $('f-name').value = site ? site.name : '';
     $('f-host').value = site ? site.host : '';
     $('f-user').value = site ? site.user : '';
     $('f-pass').value = '';
-    $('f-pass').placeholder = site && site.hasPassword ? 'Değiştirmek için yaz' : '';
+    $('f-pass').placeholder = site && site.hasPassword ? t('Değiştirmek için yaz') : '';
     $('f-port').value = site ? site.port : 21;
     $('f-dir').value = site ? site.startDir : '';
     $('f-secure').value = site && site.protocol === 'sftp' ? 'sftp' : !site || site.secure ? '1' : '0';

@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('mrc', {
     onChange: (cb) => { ipcRenderer.on('sites:changed', () => cb()); },
     list: call('sites:list'), save: call('sites:save'), remove: call('sites:remove'), favorites: call('sites:favorites'), favorite: call('sites:favorite'),
   },
+  lang: ipcRenderer.sendSync('lang:get'), // { current, chosen }
+  setLang: call('lang:set'), relaunch: call('app:relaunch'),
   newTab: call('window:newTab'),
   onSettings: (cb) => { ipcRenderer.on('settings:open', () => cb()); },
   connect: call('connect'),

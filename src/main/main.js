@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu } = require('electron');
-const { attach, confirmQuit } = require('./ipc');
+const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { t } = require('../i18n');
+const prefs = require('./prefs');
 const { webPreferences, page, lock } = require('./window');
 
 const TABS = 'mrc-ftp'; // aynı kimlikli pencereler macOS'te sekme olarak birleşebilir
@@ -22,7 +23,7 @@ function createWindow({ siteId = null, tabOf = null } = {}) {
   }));
   mainWindows.add(win);
   win.on('closed', () => mainWindows.delete(win));
-  attach(win, { openTab: (id) => createWindow({ siteId: id, tabOf: win }) });
+  ipc.attach(win, { openTab: (id) => createWindow({ siteId: id, tabOf: win }) });
   win.loadFile(page('index.html'), siteId ? { query: { site: siteId } } : undefined);
   if (tabOf && !tabOf.isDestroyed()) tabOf.addTabbedWindow(win);
   return win;
@@ -44,28 +45,48 @@ function openSettings() {
   host.webContents.send('settings:open');
 }
 
+let ipc = null; // dil belli olduktan sonra yüklenir: modüllerdeki sabit metinler doğru dille kurulsun
+
 app.whenReady().then(() => {
+  prefs.load();
+  ipc = require('./ipc');
+  ipcMain.on('lang:get', (event) => { event.returnValue = prefs.state(); });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
       label: app.name,
       submenu: [
-        { role: 'about' }, { type: 'separator' },
-        { label: 'Ayarlar…', accelerator: 'Cmd+,', click: openSettings }, { type: 'separator' },
-        { role: 'services' }, { type: 'separator' },
-        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' },
+        { role: 'about', label: t('MRC FTP Hakkında') }, { type: 'separator' },
+        { label: t('Ayarlar…'), accelerator: 'Cmd+,', click: openSettings }, { type: 'separator' },
+        { role: 'services', label: t('Servisler') }, { type: 'separator' },
+        { role: 'hide', label: t('MRC FTP\'yi Gizle') }, { role: 'hideOthers', label: t('Diğerlerini Gizle') }, { role: 'unhide', label: t('Tümünü Göster') }, { type: 'separator' },
+        { role: 'quit', label: t('MRC FTP\'den Çık') },
       ],
     },
-    { label: 'Dosya', submenu: [{ label: 'Yeni Sekme', accelerator: 'CmdOrCtrl+T', click: newTab }, { type: 'separator' }, { role: 'close' }] },
-    { role: 'editMenu', label: 'Düzen' },
-    { role: 'viewMenu', label: 'Görünüm' },
+    { label: t('Dosya'), submenu: [{ label: t('Yeni Sekme'), accelerator: 'CmdOrCtrl+T', click: newTab }, { type: 'separator' }, { role: 'close', label: t('Pencereyi Kapat') }] },
+    // Hazır menülerin maddeleri yalnızca İngilizce geldiği için tek tek adlandırılır.
+    {
+      label: t('Düzen'),
+      submenu: [
+        { role: 'undo', label: t('Geri Al') }, { role: 'redo', label: t('Yinele') }, { type: 'separator' },
+        { role: 'cut', label: t('Kes') }, { role: 'copy', label: t('Kopyala') }, { role: 'paste', label: t('Yapıştır') }, { role: 'selectAll', label: t('Tümünü Seç') },
+      ],
+    },
+    {
+      label: t('Görünüm'),
+      submenu: [
+        { role: 'resetZoom', label: t('Gerçek Boyut') }, { role: 'zoomIn', label: t('Yakınlaştır') }, { role: 'zoomOut', label: t('Uzaklaştır') }, { type: 'separator' },
+        { role: 'togglefullscreen', label: t('Tam Ekran') }, { type: 'separator' },
+        { role: 'toggleDevTools', label: t('Geliştirici Araçları') },
+      ],
+    },
     {
       role: 'window',
-      label: 'Pencere',
+      label: t('Pencere'),
       submenu: [
-        { role: 'minimize', label: 'Simge Durumuna Küçült' }, { role: 'zoom', label: 'Büyüt/Küçült' }, { type: 'separator' },
+        { role: 'minimize', label: t('Simge Durumuna Küçült') }, { role: 'zoom', label: t('Büyüt/Küçült') }, { type: 'separator' },
         // Bu rollerin hazır adı boş geliyor; ad elle verilir.
-        { role: 'selectPreviousTab', label: 'Önceki Sekme', accelerator: 'Cmd+Shift+[' }, { role: 'selectNextTab', label: 'Sonraki Sekme', accelerator: 'Cmd+Shift+]' },
-        { role: 'moveTabToNewWindow', label: 'Sekmeyi Yeni Pencereye Taşı' }, { role: 'mergeAllWindows', label: 'Tüm Pencereleri Birleştir' }, { type: 'separator' }, { role: 'front', label: 'Tümünü Öne Getir' },
+        { role: 'selectPreviousTab', label: t('Önceki Sekme'), accelerator: 'Cmd+Shift+[' }, { role: 'selectNextTab', label: t('Sonraki Sekme'), accelerator: 'Cmd+Shift+]' },
+        { role: 'moveTabToNewWindow', label: t('Sekmeyi Yeni Pencereye Taşı') }, { role: 'mergeAllWindows', label: t('Tüm Pencereleri Birleştir') }, { type: 'separator' }, { role: 'front', label: t('Tümünü Öne Getir') },
       ],
     },
   ]));
@@ -79,9 +100,9 @@ app.whenReady().then(() => {
 // ⌘Q: önce tüm sekmelere sorulur; yüklenmemiş düzenleme için "Vazgeç" denirse sekmelerin hiçbiri kapanmaz.
 let quitting = false;
 app.on('before-quit', (event) => {
-  if (quitting) return;
+  if (quitting || !ipc) return;
   event.preventDefault();
-  confirmQuit().then((ok) => {
+  ipc.confirmQuit().then((ok) => {
     if (!ok) return;
     quitting = true;
     app.quit();

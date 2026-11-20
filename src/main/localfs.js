@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const { t } = require('../i18n');
 const os = require('node:os');
 const path = require('node:path');
 const { FtpError, sortEntries } = require('./ftp');
@@ -17,7 +18,7 @@ async function list(dir) {
     }));
     return sortEntries(entries.filter(Boolean));
   } catch {
-    throw new FtpError('LOCAL', 'Klasör açılamadı.');
+    throw new FtpError('LOCAL', t('Klasör açılamadı.'));
   }
 }
 

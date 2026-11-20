@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const { t } = require('../i18n');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { pipeline } = require('node:stream/promises');
@@ -20,7 +21,7 @@ function loadKey({ keyPath, passphrase }) {
   try {
     data = fs.readFileSync(keyPath);
   } catch {
-    throw new FtpError('LOCAL', 'Anahtar dosyası okunamadı: ' + keyPath);
+    throw new FtpError('LOCAL', t('Anahtar dosyası okunamadı: ') + keyPath);
   }
   let parsed = utils.parseKey(data, passphrase || undefined);
   if (parsed instanceof Error && passphrase && !(utils.parseKey(data) instanceof Error)) {
@@ -28,9 +29,9 @@ function loadKey({ keyPath, passphrase }) {
     passphrase = null;
   }
   if (parsed instanceof Error) {
-    if (/no passphrase given/i.test(parsed.message)) throw new FtpError('NEED_PASSWORD', 'Anahtar parolası gerekli.');
-    if (passphrase && /passphrase|decrypt|integrity/i.test(parsed.message)) throw new FtpError('AUTH', 'Anahtar parolası yanlış.');
-    throw new FtpError('LOCAL', 'Bu dosya bir SSH özel anahtarı değil ya da biçimi desteklenmiyor.');
+    if (/no passphrase given/i.test(parsed.message)) throw new FtpError('NEED_PASSWORD', t('Anahtar parolası gerekli.'));
+    if (passphrase && /passphrase|decrypt|integrity/i.test(parsed.message)) throw new FtpError('AUTH', t('Anahtar parolası yanlış.'));
+    throw new FtpError('LOCAL', t('Bu dosya bir SSH özel anahtarı değil ya da biçimi desteklenmiyor.'));
   }
   return { privateKey: data, passphrase: passphrase || undefined };
 }
@@ -48,13 +49,13 @@ async function connectSsh(cfg) {
       settled = true;
       conn.destroy();
       if (seen && seen !== cfg.fingerprint) {
-        reject(new FtpError('CERT', cfg.fingerprint ? 'Sunucunun anahtarı değişmiş.' : 'Sunucunun kimliği henüz onaylanmadı.', {
+        reject(new FtpError('CERT', cfg.fingerprint ? t('Sunucunun anahtarı değişmiş.') : t('Sunucunun kimliği henüz onaylanmadı.'), {
           cert: { reason: cfg.fingerprint ? 'ssh-changed' : 'ssh-new', fingerprint: seen, subject: '', issuer: '', validTo: '' },
         }));
       } else if (err && err.level === 'client-authentication') {
-        reject(new FtpError('AUTH', privateKey ? 'Sunucu bu anahtarı kabul etmedi.' : 'Kullanıcı adı ya da şifre yanlış.'));
+        reject(new FtpError('AUTH', privateKey ? t('Sunucu bu anahtarı kabul etmedi.') : t('Kullanıcı adı ya da şifre yanlış.')));
       } else {
-        reject(new FtpError('NET', 'Sunucuya ulaşılamadı. Adresi, portu ve interneti kontrol et.'));
+        reject(new FtpError('NET', t('Sunucuya ulaşılamadı. Adresi, portu ve interneti kontrol et.')));
       }
     };
     conn.on('error', fail); // bağlandıktan sonra da dinler: sahipsiz hata olayı uygulamayı düşürmesin
@@ -77,14 +78,14 @@ async function connectSsh(cfg) {
   });
 }
 
-const STATUS_TEXT = { 2: 'Dosya ya da klasör bulunamadı.', 3: 'Bu işlem için iznin yok.' };
+const STATUS_TEXT = { 2: t('Dosya ya da klasör bulunamadı.'), 3: t('Bu işlem için iznin yok.') };
 const isStatus = (err) => err && typeof err.code === 'number';
 const isLocal = (err) => err && err.syscall && err.path;
 function mapError(err) {
   if (err instanceof FtpError) return err;
-  if (isStatus(err)) return new FtpError('FTP', STATUS_TEXT[err.code] || 'Sunucu işlemi reddetti.');
-  if (isLocal(err)) return new FtpError('LOCAL', 'Mac\'teki dosya okunamadı ya da yazılamadı.');
-  return new FtpError('NET', 'Sunucuyla bağlantı koptu.');
+  if (isStatus(err)) return new FtpError('FTP', STATUS_TEXT[err.code] || t('Sunucu işlemi reddetti.'));
+  if (isLocal(err)) return new FtpError('LOCAL', t('Mac\'teki dosya okunamadı ya da yazılamadı.'));
+  return new FtpError('NET', t('Sunucuyla bağlantı koptu.'));
 }
 
 const call = (sftp, method, ...args) => new Promise((resolve, reject) => {
@@ -137,16 +138,16 @@ async function openSftpSession(cfg) {
   };
 
   const dial = async () => {
-    if (dead) throw new FtpError('NET', 'Bağlantı kapatıldı.');
+    if (dead) throw new FtpError('NET', t('Bağlantı kapatıldı.'));
     const c = await connectSsh(cfg);
-    if (dead) { c.destroy(); throw new FtpError('NET', 'Bağlantı kapatıldı.'); }
+    if (dead) { c.destroy(); throw new FtpError('NET', t('Bağlantı kapatıldı.')); }
     c.once('close', () => { if (conn === c) { sftp = null; stopLive(); } });
     conn = c;
     try {
       sftp = await new Promise((resolve, reject) => c.sftp((err, s) => (err ? reject(err) : resolve(s))));
     } catch {
       c.destroy();
-      throw new FtpError('NET', 'Sunucu SFTP\'yi desteklemiyor ya da bu hesaba kapalı.');
+      throw new FtpError('NET', t('Sunucu SFTP\'yi desteklemiyor ya da bu hesaba kapalı.'));
     }
   };
   await dial();

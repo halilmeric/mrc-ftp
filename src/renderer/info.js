@@ -2,8 +2,8 @@
 // "Bilgi ve izinler" penceresi: dokuz onay kutusu ile üç haneli sayı birbirini günceller.
 function initInfo() {
   const $ = (id) => document.getElementById(id);
-  const WHO = ['Sahip', 'Grup', 'Herkes'];
-  const WHAT = ['Oku', 'Yaz', 'Çalıştır'];
+  const WHO = [t('Sahip'), t('Grup'), t('Herkes')];
+  const WHAT = [t('Oku'), t('Yaz'), t('Çalıştır')];
   const boxes = [];
   let current = null;
 
@@ -28,14 +28,14 @@ function initInfo() {
   $('info-apply').addEventListener('click', async () => {
     const mode = textToMode($('info-mode').value);
     $('info-err').hidden = mode != null;
-    $('info-err').textContent = 'Üç haneli bir izin yaz, örneğin 644.';
+    $('info-err').textContent = t('Üç haneli bir izin yaz, örneğin 644.');
     if (mode == null) return;
     try {
       await mrc.remote.chmod(current.path, mode);
       $('dlg-info').close();
       current.onDone();
     } catch (err) {
-      $('info-err').textContent = err.message || 'İzin değiştirilemedi.';
+      $('info-err').textContent = err.message || t('İzin değiştirilemedi.');
       $('info-err').hidden = false;
     }
   });
@@ -44,7 +44,7 @@ function initInfo() {
     open(dir, entry, onDone) {
       current = { path: joinPath(dir, entry.name), onDone };
       $('info-name').textContent = entry.name;
-      $('info-meta').textContent = [current.path, entry.isDir ? 'klasör' : formatSize(entry.size), formatDate(entry.modified)].join(' · ');
+      $('info-meta').textContent = [current.path, entry.isDir ? t('klasör') : formatSize(entry.size), formatDate(entry.modified)].join(' · ');
       $('info-note').hidden = entry.mode != null;
       $('info-err').hidden = true;
       writeBoxes(entry.mode || 0);

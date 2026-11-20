@@ -212,3 +212,5 @@ dialog input, dialog select, dialog code, .blist { border-radius: 9px; }
 .menu { border-radius: 13px; }
 .menu button { border-radius: 8px; }
 #status, .lbl, .site.add { color: color-mix(in srgb, var(--wfg) 78%, transparent); }
+dialog label.langrow { flex-direction: row; align-items: center; justify-content: space-between; font-size: 13px; color: var(--wfg); margin-bottom: 4px; }
+dialog label.langrow select { width: 160px; }

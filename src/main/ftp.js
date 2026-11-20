@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const { t } = require('../i18n');
 const net = require('node:net');
 const { finished } = require('node:stream/promises');
 const { Client, FTPError } = require('basic-ftp');
@@ -25,10 +26,10 @@ const CERT_REASONS = {
 function mapError(err) {
   if (err instanceof FtpError) return err;
   if (err instanceof FTPError) {
-    if (err.code === 530 || err.code === 430) return new FtpError('AUTH', 'Kullanıcı adı ya da şifre yanlış.');
-    return new FtpError('FTP', 'Sunucu işlemi reddetti: ' + String(err.message).replace(/^\d+[ -]/, ''));
+    if (err.code === 530 || err.code === 430) return new FtpError('AUTH', t('Kullanıcı adı ya da şifre yanlış.'));
+    return new FtpError('FTP', t('Sunucu işlemi reddetti: ') + String(err.message).replace(/^\d+[ -]/, ''));
   }
-  return new FtpError('NET', 'Sunucuya ulaşılamadı. Adresi ve interneti kontrol et.');
+  return new FtpError('NET', t('Sunucuya ulaşılamadı. Adresi ve interneti kontrol et.'));
 }
 
 // Sunucudan gelen adlar güvenilmez: yol ayırıcı ya da "." / ".." içeren girdi hedef klasörün dışına yazdırabilir.
@@ -53,7 +54,7 @@ function pinDataSockets(client, fingerprint) {
     if (sock && typeof sock.getPeerCertificate === 'function') {
       const check = () => {
         if ((sock.getPeerCertificate() || {}).fingerprint256 !== fingerprint) {
-          sock.destroy(new Error('Veri bağlantısının sertifikası tanınmıyor.'));
+          sock.destroy(new Error(t('Veri bağlantısının sertifikası tanınmıyor.')));
         }
       };
       sock.once('secureConnect', check);
@@ -86,7 +87,7 @@ async function dial({ host, port, user, password, secure, fingerprint }) {
         await client.useTLS({ rejectUnauthorized: false, servername });
         const cert = client.ftp.socket.getPeerCertificate();
         if (cert.fingerprint256 !== fingerprint) {
-          throw new FtpError('CERT', 'Sunucunun sertifikası değişmiş.', { cert: certInfo(cert, 'changed') });
+          throw new FtpError('CERT', t('Sunucunun sertifikası değişmiş.'), { cert: certInfo(cert, 'changed') });
         }
         pinDataSockets(client, fingerprint);
       } else {
@@ -95,12 +96,12 @@ async function dial({ host, port, user, password, secure, fingerprint }) {
         } catch (err) {
           const reason = CERT_REASONS[err.code] || (/CERT/.test(String(err.code)) ? 'untrusted' : null);
           if (!reason) {
-            if (err instanceof FTPError) throw new FtpError('NET', 'Sunucu şifreli bağlantıyı desteklemiyor.');
+            if (err instanceof FTPError) throw new FtpError('NET', t('Sunucu şifreli bağlantıyı desteklemiyor.'));
             throw err;
           }
           client.close();
           const cert = await probeCertificate(host, port);
-          throw new FtpError('CERT', 'Sunucunun kimliği doğrulanamadı.', { cert: certInfo(cert, reason) });
+          throw new FtpError('CERT', t('Sunucunun kimliği doğrulanamadı.'), { cert: certInfo(cert, reason) });
         }
       }
     }

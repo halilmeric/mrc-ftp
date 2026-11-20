@@ -10,7 +10,7 @@ function initBatch() {
   function preview() {
     rows = batchNames(current.names, $('b-find').value, $('b-replace').value, current.taken);
     $('b-list').replaceChildren(...rows.map((r) => el('div', { class: 'brow' + (r.error ? ' bad' : r.to === r.from ? ' same' : '') },
-      el('span', { title: r.from }, r.from), el('i', {}, '→'), el('span', { title: r.to }, r.to || '(boş)'), r.error && el('small', {}, r.error))));
+      el('span', { title: r.from }, r.from), el('i', {}, '→'), el('span', { title: r.to }, r.to || t('(boş)')), r.error && el('small', {}, r.error))));
     const changed = rows.filter((r) => r.to !== r.from).length;
     $('b-apply').disabled = busy || changed === 0 || rows.some((r) => r.error);
   }
@@ -34,11 +34,11 @@ function initBatch() {
       // Önizleme panelin eski listesine göre yapıldı; sunucudaki taşıma var olan dosyanın üzerine sessizce yazar.
       // Bu yüzden uygulamadan hemen önce klasör yeniden okunur ve adlar ona göre bir kez daha denetlenir.
       const fresh = (await mrc.remote.list(dir)).map((entry) => entry.name);
-      if (names.some((n) => !fresh.includes(n))) throw new Error('Seçili öğelerden biri artık klasörde yok.');
+      if (names.some((n) => !fresh.includes(n))) throw new Error(t('Seçili öğelerden biri artık klasörde yok.'));
       current.taken = fresh;
       const plan = batchNames(names, $('b-find').value, $('b-replace').value, fresh);
       if (plan.some((r) => r.error)) {
-        $('b-err').textContent = 'Klasör bu arada değişti; işaretli adları düzelt.';
+        $('b-err').textContent = t('Klasör bu arada değişti; işaretli adları düzelt.');
         $('b-err').hidden = false;
         return;
       }
@@ -51,13 +51,13 @@ function initBatch() {
       else preview();
       done();
     }
-    if (failed) notify(`Toplu ad değiştirme yarıda kaldı: ${failed.message} Kalan adlar değiştirilmedi.`);
+    if (failed) notify(t`Toplu ad değiştirme yarıda kaldı: ${failed.message} Kalan adlar değiştirilmedi.`);
   });
 
   return {
     open(dir, entries, taken, done) {
       current = { dir, names: entries.map((e) => e.name), taken, done };
-      $('batch-title').textContent = `${entries.length} öğeyi yeniden adlandır`;
+      $('batch-title').textContent = t`${entries.length} öğeyi yeniden adlandır`;
       $('b-find').value = '';
       $('b-replace').value = '';
       $('b-err').hidden = true;

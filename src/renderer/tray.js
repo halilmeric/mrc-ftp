@@ -22,8 +22,8 @@ function createTray({ root, panes }) {
   const totalEta = el('span');
   const list = el('div', { class: 'jobs' });
   // Hız sınırı: tüm eşzamanlı aktarımların toplamına uygulanır ve hatırlanır.
-  const LIMITS = [[0, 'Sınırsız'], [100 * 1024, '100 KB/sn'], [500 * 1024, '500 KB/sn'], [1024 * 1024, '1 MB/sn'], [5 * 1024 * 1024, '5 MB/sn']];
-  const limit = el('select', { class: 'limit', 'aria-label': 'Hız sınırı', title: 'Hız sınırı' }, LIMITS.map(([v, t]) => el('option', { value: v }, t)));
+  const LIMITS = [[0, t('Sınırsız')], [100 * 1024, t('100 KB/sn')], [500 * 1024, t('500 KB/sn')], [1024 * 1024, t('1 MB/sn')], [5 * 1024 * 1024, t('5 MB/sn')]];
+  const limit = el('select', { class: 'limit', 'aria-label': t('Hız sınırı'), title: t('Hız sınırı') }, LIMITS.map(([v, text]) => el('option', { value: v }, t(text))));
   try {
     limit.value = localStorage.getItem('mrc.limit') || '0';
   } catch {
@@ -37,12 +37,12 @@ function createTray({ root, panes }) {
   });
   // Sınır tüm sekmelerde ortaktır: başka sekmede değişince buradaki seçim de güncellenir.
   addEventListener('storage', (e) => { if (e.key === 'mrc.limit' && e.newValue != null) limit.value = e.newValue; });
-  root.append(el('div', { class: 'tray-head' }, el('b', {}, 'Aktarımlar'), head, el('span', { class: 'grow' }), limit),
+  root.append(el('div', { class: 'tray-head' }, el('b', {}, t('Aktarımlar')), head, el('span', { class: 'grow' }), limit),
     el('div', { class: 'total' }, totalBar, el('small', {}, totalPct, totalEta)), list);
 
   const activeText = (job) => {
-    const left = job.speed > 0 ? ` · ${formatEta((job.total - job.bytes) / job.speed)} kaldı` : '';
-    return `${formatSize(job.bytes)} / ${formatSize(job.total)} · ${formatSize(job.speed)}/sn${left}`;
+    const left = job.speed > 0 ? t` · ${formatEta((job.total - job.bytes) / job.speed)} kaldı` : '';
+    return t`${formatSize(job.bytes)} / ${formatSize(job.total)} · ${formatSize(job.speed)}/sn${left}`;
   };
 
   function card(job) {
@@ -51,7 +51,7 @@ function createTray({ root, panes }) {
     if (job.state === 'active') {
       const bar = progressBar(job.total ? (job.bytes / job.total) * 100 : 0);
       const text = el('small', {}, activeText(job));
-      const node = el('div', { class: 'job' }, top(arrow, el('button', { type: 'button', class: 'mini', onclick: () => mrc.transfers.cancel(job.id) }, 'İptal')), bar, text);
+      const node = el('div', { class: 'job' }, top(arrow, el('button', { type: 'button', class: 'mini', onclick: () => mrc.transfers.cancel(job.id) }, t('İptal'))), bar, text);
       node.live = { bar, text };
       return node;
     }
@@ -61,20 +61,20 @@ function createTray({ root, panes }) {
       box.addEventListener('change', () => applyAll.set(job.id, box.checked));
       const answer = (choice) => mrc.transfers.answer(job.id, choice, box.checked);
       return el('div', { class: 'job ask' }, top('?'),
-        el('small', {}, job.note || `${job.direction === 'up' ? 'Sunucuda' : 'Mac\'te'} aynı adlı dosya var`),
+        el('small', {}, job.note || t`${job.direction === 'up' ? t('Sunucuda') : t('Mac\'te')} aynı adlı dosya var`),
         el('div', { class: 'acts' },
-          el('button', { type: 'button', class: 'p', onclick: () => answer('overwrite') }, 'Üzerine yaz'),
-          el('button', { type: 'button', onclick: () => answer('skip') }, 'Atla')),
-        !job.note && el('label', {}, box, 'Hepsine uygula')); // düzenleme sorusu tek dosyaya özeldir
+          el('button', { type: 'button', class: 'p', onclick: () => answer('overwrite') }, t('Üzerine yaz')),
+          el('button', { type: 'button', onclick: () => answer('skip') }, t('Atla'))),
+        !job.note && el('label', {}, box, t('Hepsine uygula'))); // düzenleme sorusu tek dosyaya özeldir
     }
     if (job.state === 'error') {
-      return el('div', { class: 'job err' }, top('!'), el('small', {}, job.error || 'Aktarılamadı.'),
+      return el('div', { class: 'job err' }, top('!'), el('small', {}, job.error || t('Aktarılamadı.')),
         el('div', { class: 'acts' },
-          el('button', { type: 'button', onclick: () => mrc.transfers.retry(job.id) }, 'Yeniden dene'),
-          el('button', { type: 'button', onclick: () => mrc.transfers.dismiss(job.id) }, 'Kapat')));
+          el('button', { type: 'button', onclick: () => mrc.transfers.retry(job.id) }, t('Yeniden dene')),
+          el('button', { type: 'button', onclick: () => mrc.transfers.dismiss(job.id) }, t('Kapat'))));
     }
     if (job.state === 'queued') return el('div', { class: 'job' }, top(arrow, el('small', {}, job.total ? formatSize(job.total) : '')));
-    const word = job.state === 'done' ? (job.direction === 'up' ? 'Yüklendi' : 'İndirildi') : job.state === 'skipped' ? 'Atlandı' : 'İptal edildi';
+    const word = job.state === 'done' ? (job.direction === 'up' ? t('Yüklendi') : t('İndirildi')) : job.state === 'skipped' ? t('Atlandı') : t('İptal edildi');
     return el('div', { class: 'job' + (job.state === 'done' ? ' done' : '') }, top(job.state === 'done' ? '✓' : arrow, el('small', {}, word)));
   }
 
@@ -100,11 +100,11 @@ function createTray({ root, panes }) {
     const sum = counted.reduce((n, j) => n + j.total, 0);
     const got = counted.reduce((n, j) => n + (j.state === 'done' ? j.total : j.state === 'active' ? j.bytes : 0), 0);
     const pct = sum ? Math.round((got / sum) * 100) : 0;
-    head.textContent = `${jobs.filter((j) => FINISHED.includes(j.state)).length} / ${jobs.length} bitti`;
+    head.textContent = t`${jobs.filter((j) => FINISHED.includes(j.state)).length} / ${jobs.length} bitti`;
     totalBar.firstChild.style.width = pct + '%';
     totalPct.textContent = pct + '%';
     const speed = jobs.reduce((n, j) => n + (j.state === 'active' ? j.speed : 0), 0); // eşzamanlı aktarımların toplam hızı
-    totalEta.textContent = speed > 0 ? `yaklaşık ${formatEta((sum - got) / speed)}` : '';
+    totalEta.textContent = speed > 0 ? t`yaklaşık ${formatEta((sum - got) / speed)}` : '';
 
     // Kartlar anahtarla yeniden kullanılır: değişmeyen kart yerinden oynamaz, üstündeki tıklama kaybolmaz.
     const desired = [];
@@ -119,9 +119,9 @@ function createTray({ root, panes }) {
     for (const j of [...group(['active']), ...group(['asking']), ...group(['error'])]) use(keyOf(j), () => card(j));
     const queued = group(['queued']);
     const finished = group(FINISHED);
-    if (queued.length) use('sub:queued', () => el('div', { class: 'sub' }, 'Sırada'));
+    if (queued.length) use('sub:queued', () => el('div', { class: 'sub' }, t('Sırada')));
     for (const j of queued) use(keyOf(j), () => card(j));
-    if (finished.length) use('sub:finished', () => el('div', { class: 'sub' }, 'Biten'));
+    if (finished.length) use('sub:finished', () => el('div', { class: 'sub' }, t('Biten')));
     for (const j of finished) use(keyOf(j), () => card(j));
     for (const [key, node] of cache) {
       if (!keys.has(key)) { node.remove(); cache.delete(key); }

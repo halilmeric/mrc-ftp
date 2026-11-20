@@ -15,7 +15,7 @@
     }
   }
   const guard = () => {
-    if (!connected || remote.path == null) { notify('Önce bir siteye bağlan.'); return false; }
+    if (!connected || remote.path == null) { notify(t('Önce bir siteye bağlan.')); return false; }
     notify('');
     return true;
   };
@@ -24,7 +24,7 @@
     root: $('local'), kind: 'local', label: 'Mac', list: mrc.local.list,
     onSend: (dir, entries) => guard() && upload(entries, dir, remote.path),
     onDropIn: (src, dir) => guard() && src.from === 'remote' && download(src.entries, src.dir, dir),
-    onLoaded: (n) => { $('st-local').textContent = `Mac: ${n} öğe`; },
+    onLoaded: (n) => { $('st-local').textContent = t`Mac: ${n} öğe`; },
     onPreview: (dir, entry) => feat().preview && mrc.preview.local(joinPath(dir, entry.name)),
   });
   const info = initInfo();
@@ -43,21 +43,21 @@
   }
   const termPanel = initTermPanel({ getCwd: () => remote.path });
   const remote = createPane({
-    root: $('remote'), kind: 'remote', label: 'Sunucu', list: mrc.remote.list, ops: mrc.remote,
+    root: $('remote'), kind: 'remote', label: t('Sunucu'), list: mrc.remote.list, ops: mrc.remote,
     menu: (entry, picked) => [
-      feat().edit && !entry.isDir && { label: 'Düzenle', run: () => mrc.edit.open(joinPath(remote.path, entry.name), { size: entry.size, modified: entry.modified }).catch((err) => notify(err.message)) },
-      { label: 'İndirilenler\'e indir', run: async () => download(picked, remote.path, (await mrc.local.downloads()).path) },
-      { label: 'Farklı indir…', run: async () => { const dir = await mrc.local.pickDir(); if (dir) download(picked, remote.path, dir.path); } },
-      { label: 'Bilgi ve izinler…', run: () => info.open(remote.path, entry, () => remote.refresh()) },
+      feat().edit && !entry.isDir && { label: t('Düzenle'), run: () => mrc.edit.open(joinPath(remote.path, entry.name), { size: entry.size, modified: entry.modified }).catch((err) => notify(err.message)) },
+      { label: t('İndirilenler\'e indir'), run: async () => download(picked, remote.path, (await mrc.local.downloads()).path) },
+      { label: t('Farklı indir…'), run: async () => { const dir = await mrc.local.pickDir(); if (dir) download(picked, remote.path, dir.path); } },
+      { label: t('Bilgi ve izinler…'), run: () => info.open(remote.path, entry, () => remote.refresh()) },
       picked.length > 1 && feat().batch
-        ? { label: 'Toplu yeniden adlandır…', run: () => batch.open(remote.path, picked, remote.names, () => remote.refresh()) }
-        : { label: 'Yeniden adlandır', run: () => remote.startRename(entry.name) },
-      { label: 'Sil', danger: true, run: () => remote.startDelete(entry.name) },
+        ? { label: t('Toplu yeniden adlandır…'), run: () => batch.open(remote.path, picked, remote.names, () => remote.refresh()) }
+        : { label: t('Yeniden adlandır'), run: () => remote.startRename(entry.name) },
+      { label: t('Sil'), danger: true, run: () => remote.startDelete(entry.name) },
     ].filter(Boolean),
     onPreview: (dir, entry) => feat().preview && mrc.preview.remote(joinPath(dir, entry.name), entry.size).catch((err) => notify(err.message)),
     onSend: (dir, entries) => guard() && download(entries, dir, local.path),
     onDropIn: (src, dir) => guard() && src.from !== 'remote' && upload(src.entries, src.dir, dir),
-    onLoaded: (n, path) => { $('st-remote').textContent = path == null ? '' : `Sunucu: ${n} öğe`; },
+    onLoaded: (n, path) => { $('st-remote').textContent = path == null ? '' : t`Sunucu: ${n} öğe`; },
   });
 
   document.addEventListener('mrc:connected', async (e) => {
@@ -71,7 +71,7 @@
     window.mrcTray.render([]); // önceki sitenin kartları yeni sitenin kuyruğuna karışmasın
     $('site-name').textContent = site.name;
     $('badge').hidden = false;
-    $('badge').textContent = site.secure ? 'Şifreli bağlantı' : 'Şifresiz';
+    $('badge').textContent = site.secure ? t('Şifreli bağlantı') : t('Şifresiz');
     $('badge').className = 'badge' + (site.secure ? '' : ' plain');
     $('btn-mkdir').hidden = false;
     remote.reset();
@@ -83,7 +83,7 @@
     site = null;
     hasShell = false;
     applyFeatures();
-    $('site-name').textContent = 'Bağlı değil';
+    $('site-name').textContent = t('Bağlı değil');
     $('badge').hidden = true;
     $('btn-mkdir').hidden = true;
     $('st-edit').hidden = true;
@@ -93,7 +93,7 @@
 
   mrc.edit.onChange((count) => {
     $('st-edit').hidden = count === 0;
-    $('st-edit-text').textContent = `${count} dosya düzenleniyor`;
+    $('st-edit-text').textContent = t`${count} dosya düzenleniyor`;
   });
   $('st-edit-stop').addEventListener('click', () => mrc.edit.stopAll());
 
@@ -107,7 +107,7 @@
     const saved = favorites.includes(here);
     const toggle = async () => { favorites = await mrc.sites.favorite(site.id, here, !saved); };
     showMenu(box.left, box.bottom + 4, [
-      { label: saved ? 'Bu klasörü çıkar' : 'Bu klasörü ekle', run: toggle },
+      { label: saved ? t('Bu klasörü çıkar') : t('Bu klasörü ekle'), run: toggle },
       ...favorites.map((p) => ({ label: p, run: () => remote.go(p) })),
     ]);
   });

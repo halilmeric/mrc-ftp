@@ -1,5 +1,7 @@
 'use strict';
 // Saf biçimlendirme işlevleri; hem arayüzde hem node testlerinde kullanılır.
+if (typeof module !== 'undefined') { var { t, getLang } = require('../i18n'); } // tarayıcıda i18n.js'ten gelir
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 
 function formatSize(bytes) {
@@ -8,7 +10,7 @@ function formatSize(bytes) {
   let value = bytes;
   let unit = -1;
   do { value /= 1024; unit += 1; } while (value >= 1024 && unit < units.length - 1);
-  const text = value < 10 && Math.round(value * 10) % 10 !== 0 ? value.toFixed(1).replace('.', ',') : String(Math.round(value));
+  const text = value < 10 && Math.round(value * 10) % 10 !== 0 ? value.toFixed(1).replace('.', getLang() === 'en' ? '.' : ',') : String(Math.round(value));
   return `${text} ${units[unit]}`;
 }
 
@@ -17,15 +19,15 @@ function formatDate(iso, now = new Date()) {
   const d = new Date(iso);
   const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(now) - day(d)) / 86400000);
-  if (diff === 0) return 'bugün';
-  if (diff === 1) return 'dün';
-  const short = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  if (diff === 0) return t('bugün');
+  if (diff === 1) return t('dün');
+  const short = `${d.getDate()} ${(getLang() === 'en' ? MONTHS_EN : MONTHS)[d.getMonth()]}`;
   return d.getFullYear() === now.getFullYear() ? short : `${short} ${d.getFullYear()}`;
 }
 
 function formatEta(seconds) {
-  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} sn`;
-  return `${Math.round(seconds / 60)} dk`;
+  if (seconds < 60) return t`${Math.max(1, Math.round(seconds))} sn`;
+  return t`${Math.round(seconds / 60)} dk`;
 }
 
 const modeToText = (mode) => (mode & 0o777).toString(8).padStart(3, '0');
@@ -49,10 +51,10 @@ function batchNames(names, find, replace, taken) {
   const others = new Set(taken.map(key).filter((n) => !selected.has(n)));
   for (const r of rows) {
     if (r.to === r.from) continue;
-    if (!r.to || r.to === '.' || r.to === '..') r.error = 'ad boş kalıyor';
-    else if (/[\\/]/.test(r.to)) r.error = 'ad / içeremez';
-    else if (count.get(key(r.to)) > 1) r.error = 'iki öğe aynı adı alıyor';
-    else if (others.has(key(r.to)) || (selected.has(key(r.to)) && key(r.to) !== key(r.from))) r.error = 'bu ad zaten var';
+    if (!r.to || r.to === '.' || r.to === '..') r.error = t('ad boş kalıyor');
+    else if (/[\\/]/.test(r.to)) r.error = t('ad / içeremez');
+    else if (count.get(key(r.to)) > 1) r.error = t('iki öğe aynı adı alıyor');
+    else if (others.has(key(r.to)) || (selected.has(key(r.to)) && key(r.to) !== key(r.from))) r.error = t('bu ad zaten var');
   }
   return rows;
 }

@@ -1,3 +1,5 @@
+const { t } = require('../i18n');
+
 const KEEP = 1024 * 1024;
 // Klasör adı sunucudan gelir ve giriş kabuğu (bash, csh, fish…) bilinmez. Tek tırnak içinde her kabukta
 // düz metin kalan adlar komuta girer; tırnak, ters bölü, ünlem ya da denetim karakteri içeren ad girmez.
@@ -45,7 +47,7 @@ function createTerminal({ connect, onData, onState }) {
       try {
         c = await connect();
       } catch (err) {
-        if (mine === gen) set('closed', (err && err.message) || 'Sunucuya bağlanılamadı.');
+        if (mine === gen) set('closed', (err && err.message) || t('Sunucuya bağlanılamadı.'));
         return;
       }
       if (mine !== gen) { c.destroy(); return; }
@@ -61,7 +63,7 @@ function createTerminal({ connect, onData, onState }) {
         if (mine !== gen) return;
         conn = null;
         c.destroy();
-        set('refused', 'Bu hesapta kabuk (SSH komut satırı) erişimi kapalı. Dosya işlemleri bundan etkilenmez.');
+        set('refused', t('Bu hesapta kabuk (SSH komut satırı) erişimi kapalı. Dosya işlemleri bundan etkilenmez.'));
       };
       const opened = (ch) => {
         if (mine !== gen) return;

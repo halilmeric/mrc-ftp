@@ -39,7 +39,7 @@ function createTermView(body) {
 
 // Başlıktaki durum yazısı ve "Yeniden başlat" düğmesi.
 function bindTermStatus({ view, note, restart }) {
-  const TEXT = { starting: 'Bağlanıyor…', closed: 'Oturum kapandı', refused: 'Kabuk erişimi kapalı' };
+  const TEXT = { starting: t('Bağlanıyor…'), closed: t('Oturum kapandı'), refused: t('Kabuk erişimi kapalı') };
   const show = ({ state, message }, quiet) => {
     note.textContent = TEXT[state] || '';
     restart.hidden = state !== 'closed';

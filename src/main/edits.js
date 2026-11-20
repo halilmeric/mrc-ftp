@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const { t } = require('../i18n');
 const path = require('node:path');
 const { FtpError } = require('./ftp');
 
@@ -38,9 +39,9 @@ function createEdits({ dir, getSession, enqueue, open, onChange, interval = 1000
 
     async start(remotePath, entry) {
       const name = path.posix.basename(remotePath);
-      if (remotePath.split('/').includes('..') || !name || /[\\/]/.test(name)) throw new FtpError('LOCAL', 'Bu dosya düzenlemeye açılamıyor.');
-      if (RUNS_ON_OPEN.has(path.extname(name).slice(1).toLowerCase())) throw new FtpError('LOCAL', 'Bu dosya türü güvenlik nedeniyle düzenlemeye açılmıyor.');
-      if (entry.size > MAX_EDIT) throw new FtpError('LOCAL', 'Düzenlemek için çok büyük, önce indir.');
+      if (remotePath.split('/').includes('..') || !name || /[\\/]/.test(name)) throw new FtpError('LOCAL', t('Bu dosya düzenlemeye açılamıyor.'));
+      if (RUNS_ON_OPEN.has(path.extname(name).slice(1).toLowerCase())) throw new FtpError('LOCAL', t('Bu dosya türü güvenlik nedeniyle düzenlemeye açılmıyor.'));
+      if (entry.size > MAX_EDIT) throw new FtpError('LOCAL', t('Düzenlemek için çok büyük, önce indir.'));
       const existing = items.get(remotePath);
       if (existing) {
         await open(existing.localPath);
@@ -51,7 +52,7 @@ function createEdits({ dir, getSession, enqueue, open, onChange, interval = 1000
       const session = await getSession();
       // Panelin gösterdiği liste eskimiş olabilir: boyut sınırı ve karşılaştırma temeli güncel listeden alınır.
       const fresh = (await session.list(path.posix.dirname(remotePath))).find((e) => e.name === name) || entry;
-      if (fresh.size > MAX_EDIT) throw new FtpError('LOCAL', 'Düzenlemek için çok büyük, önce indir.');
+      if (fresh.size > MAX_EDIT) throw new FtpError('LOCAL', t('Düzenlemek için çok büyük, önce indir.'));
       await session.fetch(remotePath, localPath);
       await open(localPath); // açılamazsa izlemeye alınmaz
       const item = { localPath, remotePath, mark: markOf(localPath), baseline: { size: fresh.size, modified: fresh.modified } };
