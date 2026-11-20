@@ -25,26 +25,36 @@
     onSend: (dir, entries) => guard() && upload(entries, dir, remote.path),
     onDropIn: (src, dir) => guard() && src.from === 'remote' && download(src.entries, src.dir, dir),
     onLoaded: (n) => { $('st-local').textContent = `Mac: ${n} öğe`; },
-    onPreview: (dir, entry) => mrc.preview.local(joinPath(dir, entry.name)),
+    onPreview: (dir, entry) => feat().preview && mrc.preview.local(joinPath(dir, entry.name)),
   });
   const info = initInfo();
   const batch = initBatch();
   let site = null; // bağlı site
   let favorites = [];
+  let hasShell = false; // bağlı site terminal sunuyor (SFTP)
+  // Ayarlar'da kapatılan özelliğin düğmesi görünmez; menü maddeleri açılırken feat() ile süzülür.
+  function applyFeatures() {
+    const f = feat();
+    $('btn-fav').hidden = !(connected && f.favorites);
+    mrc.transfers.setParallel(f.parallel);
+    if (termPanel.enabled === (hasShell && f.terminal)) return;
+    if (termPanel.enabled) mrc.term.stop(); // görünmeyen kabuk arkada açık kalmasın
+    termPanel.setEnabled(hasShell && f.terminal);
+  }
   const termPanel = initTermPanel({ getCwd: () => remote.path });
   const remote = createPane({
     root: $('remote'), kind: 'remote', label: 'Sunucu', list: mrc.remote.list, ops: mrc.remote,
     menu: (entry, picked) => [
-      !entry.isDir && { label: 'Düzenle', run: () => mrc.edit.open(joinPath(remote.path, entry.name), { size: entry.size, modified: entry.modified }).catch((err) => notify(err.message)) },
+      feat().edit && !entry.isDir && { label: 'Düzenle', run: () => mrc.edit.open(joinPath(remote.path, entry.name), { size: entry.size, modified: entry.modified }).catch((err) => notify(err.message)) },
       { label: 'İndirilenler\'e indir', run: async () => download(picked, remote.path, (await mrc.local.downloads()).path) },
       { label: 'Farklı indir…', run: async () => { const dir = await mrc.local.pickDir(); if (dir) download(picked, remote.path, dir.path); } },
       { label: 'Bilgi ve izinler…', run: () => info.open(remote.path, entry, () => remote.refresh()) },
-      picked.length > 1
+      picked.length > 1 && feat().batch
         ? { label: 'Toplu yeniden adlandır…', run: () => batch.open(remote.path, picked, remote.names, () => remote.refresh()) }
         : { label: 'Yeniden adlandır', run: () => remote.startRename(entry.name) },
       { label: 'Sil', danger: true, run: () => remote.startDelete(entry.name) },
     ].filter(Boolean),
-    onPreview: (dir, entry) => mrc.preview.remote(joinPath(dir, entry.name), entry.size).catch((err) => notify(err.message)),
+    onPreview: (dir, entry) => feat().preview && mrc.preview.remote(joinPath(dir, entry.name), entry.size).catch((err) => notify(err.message)),
     onSend: (dir, entries) => guard() && download(entries, dir, local.path),
     onDropIn: (src, dir) => guard() && src.from !== 'remote' && upload(src.entries, src.dir, dir),
     onLoaded: (n, path) => { $('st-remote').textContent = path == null ? '' : `Sunucu: ${n} öğe`; },
@@ -54,10 +64,10 @@
     const { startDir, terminal } = e.detail;
     ({ site } = e.detail);
     favorites = e.detail.favorites || [];
-    $('btn-fav').hidden = false;
     connected = true;
+    hasShell = Boolean(terminal);
     termPanel.setEnabled(false); // önceki sitenin terminali kapanır
-    termPanel.setEnabled(Boolean(terminal));
+    applyFeatures();
     window.mrcTray.render([]); // önceki sitenin kartları yeni sitenin kuyruğuna karışmasın
     $('site-name').textContent = site.name;
     $('badge').hidden = false;
@@ -71,8 +81,8 @@
   document.addEventListener('mrc:disconnected', () => {
     connected = false;
     site = null;
-    $('btn-fav').hidden = true;
-    termPanel.setEnabled(false);
+    hasShell = false;
+    applyFeatures();
     $('site-name').textContent = 'Bağlı değil';
     $('badge').hidden = true;
     $('btn-mkdir').hidden = true;
@@ -109,5 +119,7 @@
   window.mrcTray = createTray({ root: $('tray'), panes: { local, remote } });
   mrc.transfers.onChange((jobs) => window.mrcTray.render(jobs));
   mrc.local.home().then((h) => local.go(h.path));
+  initSettings(applyFeatures);
+  applyFeatures();
   initSites();
 })();

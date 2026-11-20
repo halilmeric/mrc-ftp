@@ -173,3 +173,9 @@ code.inline { display: inline; padding: 1px 5px; margin: 0; }
 .acts button:disabled { opacity: .5; }
 .menu { max-width: 360px; }
 .menu button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#set-list { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 14px; }
+dialog label.sw { flex-direction: row; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--wfg); }
+dialog label.sw input { height: auto; margin: 2px 0 0; accent-color: var(--acc); }
+dialog label.sw span { display: flex; flex-direction: column; gap: 2px; }
+dialog label.sw b { font-weight: 500; }
+dialog label.sw small { font-size: 11px; color: var(--wm); }

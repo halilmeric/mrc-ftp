@@ -33,9 +33,26 @@ function newTab() {
   createWindow({ tabOf: host || null });
 }
 
+// Ayarlar öndeki sekmede açılır; anahtarlar tüm sekmelerde ortaktır.
+function openSettings() {
+  const front = BrowserWindow.getFocusedWindow();
+  const host = mainWindows.has(front) ? front : [...mainWindows].pop();
+  if (!host) return;
+  host.focus();
+  host.webContents.send('settings:open');
+}
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { role: 'appMenu' },
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' }, { type: 'separator' },
+        { label: 'Ayarlar…', accelerator: 'Cmd+,', click: openSettings }, { type: 'separator' },
+        { role: 'services' }, { type: 'separator' },
+        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' },
+      ],
+    },
     { label: 'Dosya', submenu: [{ label: 'Yeni Sekme', accelerator: 'CmdOrCtrl+T', click: newTab }, { type: 'separator' }, { role: 'close' }] },
     { role: 'editMenu' },
     { role: 'viewMenu' },

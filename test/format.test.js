@@ -63,3 +63,13 @@ test('toplu ad: {n} yalnızca kalıpta sayılır; harf büyüklüğü farkı ça
   assert.ok(batchNames(['foo.txt'], 'foo', 'barx', ['foo.txt', 'barX.txt'])[0].error);
   assert.ok(!batchNames(['foo.txt'], 'foo', 'Foo', ['foo.txt'])[0].error, 'kendi adının harfini değiştirmek serbest');
 });
+
+test('features: kapalı listesinde olmayan her özellik açıktır', () => {
+  const { features } = require('../src/renderer/format');
+  const all = { terminal: true, favorites: true, parallel: true, edit: true, batch: true, preview: true };
+  assert.deepStrictEqual(features(null), all);
+  assert.deepStrictEqual(features('bozuk{'), all);
+  assert.deepStrictEqual(features('{"terminal":false}'), all); // liste değilse yok sayılır
+  assert.deepStrictEqual(features('["terminal","yok",7]'), { ...all, terminal: false });
+  assert.deepStrictEqual(features('["edit","batch"]'), { ...all, edit: false, batch: false });
+});

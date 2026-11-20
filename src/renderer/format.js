@@ -57,4 +57,17 @@ function batchNames(names, find, replace, taken) {
   return rows;
 }
 
-if (typeof module !== 'undefined') module.exports = { formatSize, formatDate, formatEta, modeToText, textToMode, batchNames };
+// Ayarlar'dan kapatılabilen özellikler. Saklanan değer kapalı olanların listesidir; bozuk ya da eksik değer = hepsi açık.
+const FEATURE_KEYS = ['terminal', 'favorites', 'parallel', 'edit', 'batch', 'preview'];
+function features(raw) {
+  let off = [];
+  try {
+    off = JSON.parse(raw);
+  } catch {
+    // okunamayan ayar yok sayılır
+  }
+  if (!Array.isArray(off)) off = [];
+  return Object.fromEntries(FEATURE_KEYS.map((k) => [k, !off.includes(k)]));
+}
+
+if (typeof module !== 'undefined') module.exports = { formatSize, formatDate, formatEta, modeToText, textToMode, batchNames, features };

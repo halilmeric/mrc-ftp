@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('mrc', {
     list: call('sites:list'), save: call('sites:save'), remove: call('sites:remove'), favorites: call('sites:favorites'), favorite: call('sites:favorite'),
   },
   newTab: call('window:newTab'),
+  onSettings: (cb) => { ipcRenderer.on('settings:open', () => cb()); },
   connect: call('connect'),
   trust: call('trust'),
   disconnect: call('disconnect'),
@@ -24,12 +25,12 @@ contextBridge.exposeInMainWorld('mrc', {
   preview: { local: call('preview:local'), remote: call('preview:remote') },
   transfers: {
     add: call('transfers:add'), cancel: call('transfers:cancel'), retry: call('transfers:retry'),
-    answer: call('transfers:answer'), clearFinished: call('transfers:clearFinished'), dismiss: call('transfers:dismiss'), setLimit: call('transfers:setLimit'),
+    answer: call('transfers:answer'), clearFinished: call('transfers:clearFinished'), dismiss: call('transfers:dismiss'), setLimit: call('transfers:setLimit'), setParallel: call('transfers:setParallel'),
     onChange: (cb) => { ipcRenderer.on('transfers:change', (_event, jobs) => cb(jobs)); },
   },
   term: {
     start: call('term:start'), resize: call('term:resize'), snapshot: call('term:snapshot'),
-    detach: call('term:detach'), dock: call('term:dock'),
+    detach: call('term:detach'), dock: call('term:dock'), stop: call('term:stop'),
     input: (data) => ipcRenderer.send('term:input', data),
     onData: (cb) => { ipcRenderer.on('term:data', (_event, data) => cb(data)); },
     onState: (cb) => { ipcRenderer.on('term:state', (_event, state) => cb(state)); },

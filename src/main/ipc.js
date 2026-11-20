@@ -47,6 +47,7 @@ function attach(win, { openTab }) {
   const ownId = win.webContents.id;
   let leaving = false; // true: kapanmadan önce sorulacak şey kalmadı
   let active = null; // { siteId, session, queue, edits, term, cwd }
+  let parallel = true; // Ayarlar › Eşzamanlı aktarım; bir sonraki bağlantıda geçerli olur
   let connecting = null; // bağlanmakta olunan sitenin kimliği
   // Düzenleme ve önizleme kopyaları pencereye özel klasörde durur; o pencerenin bağlantısı kesilince silinir.
   const tmp = path.join(tmpRoot, String(ownId));
@@ -160,6 +161,7 @@ function attach(win, { openTab }) {
         openSession: () => open({ ...cfg, limiter }),
         onChange: (jobs) => send('transfers:change', jobs),
         onUploaded: (remotePath, baseline) => edits.updateBaseline(remotePath, baseline),
+        parallel: parallel ? 3 : 1,
       });
       edits = createEdits({
         dir: path.join(tmp, 'edit'),
@@ -227,6 +229,8 @@ function attach(win, { openTab }) {
     'term:snapshot': () => termOf().snapshot(),
     'term:detach': () => { termOf(); detachTerm(); },
     'term:dock': () => { if (termWin) termWin.close(); },
+    'term:stop': () => { if (active && active.term) active.term.close(); if (termWin) termWin.close(); },
+    'transfers:setParallel': (on) => { parallel = on !== false; },
     'transfers:setLimit': (bytesPerSec) => { limiter.set(Math.min(Number(bytesPerSec) || 0, 1e9)); },
     'transfers:add': (job) => need().queue.add(job),
     'transfers:cancel': (id) => need().queue.cancel(id),

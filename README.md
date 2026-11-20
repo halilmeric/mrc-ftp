@@ -14,6 +14,7 @@ cPanel hostinglerine bağlanıp dosya yüklemek ve indirmek için sade bir macOS
 - Aynı anda üç dosya aktarır; sunucu bağlantı sınırına takılırsa kendiliğinden azaltır. Aktarım panelinden hız sınırı.
 - Sık kullanılan sunucu klasörleri (üst çubuk) ve toplu yeniden adlandırma (birden çok öğe seçip sağ tık).
 - Sekmeler: aynı anda birden çok siteye bağlı kal (⌘T; site listesinde ⌘-tık ya da sağ tık › Yeni sekmede aç). Her sekmenin kendi kuyruğu ve terminali var.
+- Ayarlar (⌘,): kullanmadığın özellikleri kapat (terminal, sık kullanılanlar, eşzamanlı aktarım, düzenleme, toplu yeniden adlandırma, Hızlı Bakış); düğmeleri ve menü maddeleri görünmez olur.
 - SFTP (SSH): şifre ya da SSH anahtarıyla giriş; sunucu anahtarının parmak izi ilk bağlantıda sorulur, değişirse bağlanmaz.
 - Terminal (yalnızca SFTP sitelerinde): altta açılır (⌃`), "Ayır" ile kendi penceresine çıkar; oturum kopmaz.
 

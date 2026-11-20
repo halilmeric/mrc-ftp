@@ -83,7 +83,7 @@ function initTermPanel({ getCwd }) {
   mrc.term.onState((s) => { state = s.state; });
   mrc.term.onDocked((isDocked) => {
     docked = isDocked;
-    if (isDocked) wanted = true;
+    if (isDocked && enabled) wanted = true; // Ayarlar'dan kapatıldıysa yeniden açılınca kendiliğinden gelmesin
     apply();
   });
   $('btn-term').addEventListener('click', toggle);
@@ -109,6 +109,7 @@ function initTermPanel({ getCwd }) {
   });
 
   return {
+    get enabled() { return enabled; },
     setEnabled(on) {
       enabled = on;
       $('btn-term').hidden = !on;
