@@ -63,12 +63,6 @@ npm run dist   # dist/ altında .dmg üret (Apple Silicon)
 
 Elle denemek için yerel test sunucusu: `node test/helpers/server.js --tls --port 2121` (kullanıcı `test`, şifre `test`). SFTP ve terminal için: `node test/helpers/ssh-server.js --port 2222`.
 
-## Kurulum
-
-`dist/` altındaki `.dmg` dosyasını aç, MRC FTP'yi Uygulamalar klasörüne sürükle.
-
-Uygulama Apple tarafından imzalanmamıştır (yalnızca ad-hoc imza). Derlendiği Mac'te doğrudan açılır. Başka bir Mac'te ilk açılışta macOS engeller: **Sistem Ayarları › Gizlilik ve Güvenlik › Yine de aç**.
-
 ## Lisans
 
 MIT
