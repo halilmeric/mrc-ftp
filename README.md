@@ -27,14 +27,11 @@ Görsellerdeki pencere uygulamanın kendi ekran görüntüsüdür; arka plan ve 
 
 ## Kurulum
 
-Şimdilik kaynaktan derlenir (Apple Silicon):
+1. [Son sürüm](https://github.com/halilmeric/mrc-ftp/releases/latest) sayfasından `.dmg` dosyasını indir (Apple Silicon Mac'ler için).
+2. Dosyayı aç ve MRC FTP'yi Uygulamalar klasörüne sürükle.
+3. İlk açılışta macOS "geliştiricisi doğrulanamadı" uyarısı verir, çünkü paket henüz Apple tarafından imzalanıp onaylanmadı. Uygulamayı bir kez açmayı dene, sonra Sistem Ayarları › Gizlilik ve Güvenlik bölümünde "Yine de Aç" de.
 
-```bash
-npm install
-npm run dist   # dist/ altında .dmg üretir
-```
-
-Paket henüz Apple tarafından imzalanıp onaylanmadığı için ilk açılışta macOS uyarı verir; Finder'da uygulamaya sağ tıklayıp "Aç" demen gerekir.
+Kaynaktan derlemek istersen aşağıdaki "Geliştirme" bölümüne bak.
 
 ## Özellikler
 
