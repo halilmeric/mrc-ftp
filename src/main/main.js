@@ -49,6 +49,8 @@ let ipc = null; // dil belli olduktan sonra yüklenir: modüllerdeki sabit metin
 
 app.whenReady().then(() => {
   prefs.load();
+  // Paketlenmemiş (npm start) çalışmada Dock'ta Electron'un simgesi yerine bizimki görünsün.
+  if (!app.isPackaged && app.dock) app.dock.setIcon(require('node:path').join(__dirname, '..', '..', 'build', 'icon.png'));
   ipc = require('./ipc');
   ipcMain.on('lang:get', (event) => { event.returnValue = prefs.state(); });
   Menu.setApplicationMenu(Menu.buildFromTemplate([

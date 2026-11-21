@@ -221,3 +221,5 @@ dialog label.langrow select { width: 160px; }
 .ic.f { --k: #8b93a7; width: 13px; height: 16px; border: 0; border-radius: 2.5px; margin: 0 2px; background: var(--k); clip-path: polygon(0 0, 62% 0, 100% 31%, 100% 100%, 0 100%); }
 .ic.f::before { display: block; left: auto; right: 0; top: 0; width: 5px; height: 5px; border-radius: 0 0 0 2px; background: rgba(255, 255, 255, .5); }
 .ic.f.code { --k: #4f8df0; } .ic.f.image { --k: #2fae7b; } .ic.f.archive { --k: #e09a2f; } .ic.f.doc { --k: #7f8aa3; } .ic.f.media { --k: #b667d6; }
+.tb, .badge, #site-name { white-space: nowrap; }
+#site-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }

@@ -1,6 +1,42 @@
+<p align="center"><img src="docs/gorseller/simge.png" width="128" alt="MRC FTP simgesi"></p>
+
 # MRC FTP
 
-cPanel hostinglerine bağlanıp dosya yüklemek ve indirmek için sade bir macOS FTP/FTPS/SFTP istemcisi.
+**Mac için sade, hızlı ve açık kaynak FTP / FTPS / SFTP istemcisi.**
+
+cPanel hostingine bağlan, dosyalarını sürükleyip bırak, işin bitsin. Solda Mac'in, sağda sunucun; arada kaybolacağın menüler yok. Ücretsiz ve açık kaynak (MIT).
+
+![Ana ekran: solda Mac, sağda sunucu, en sağda aktarımlar](docs/gorseller/1-ana-ekran.png)
+
+## Neden MRC FTP?
+
+- **Sade:** iki panel, bir aktarım listesi. Kullanmadığın özelliği Ayarlar'dan kapatırsın, düğmesi de kaybolur.
+- **Güvenli:** şifreler macOS Anahtar Zinciri destekli şifrelemeyle saklanır; tanınmayan sunucuya şifre gönderilmeden önce sorulur.
+- **Dayanıklı:** yarım dosya bırakmaz, bağlantı koparsa kaldığı yerden sürdürür.
+- **Türkçe:** arayüz, menüler ve hata mesajları baştan sona Türkçe; istersen İngilizce.
+
+## Ekran görüntüleri
+
+| | |
+|---|---|
+| ![Açık tema](docs/gorseller/2-acik-tema.png) | ![Yerleşik SSH terminali](docs/gorseller/3-terminal.png) |
+| ![Ayarlar](docs/gorseller/4-ayarlar.png) | ![Site formu](docs/gorseller/5-site-formu.png) |
+| ![Sağ tık menüsü](docs/gorseller/6-sag-tik.png) | ![Toplu yeniden adlandırma](docs/gorseller/7-toplu-ad.png) |
+
+Görsellerdeki pencere uygulamanın kendi ekran görüntüsüdür; arka plan ve başlıklar tanıtım için eklenmiştir.
+
+## Kurulum
+
+Şimdilik kaynaktan derlenir (Apple Silicon):
+
+```bash
+npm install
+npm run dist   # dist/ altında .dmg üretir
+```
+
+Paket henüz Apple tarafından imzalanıp onaylanmadığı için ilk açılışta macOS uyarı verir; Finder'da uygulamaya sağ tıklayıp "Aç" demen gerekir.
+
+## Özellikler
 
 - Solda Mac, sağda sunucu; sürükleyip bırak ya da çift tıkla.
 - Aktarımlar sağdaki panelde: ilerleme, iptal, yeniden dene, aynı adlı dosya sorusu.
